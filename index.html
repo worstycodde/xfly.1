@@ -1,0 +1,1754 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="format-detection" content="telephone=no" />
+<title>Hangar – Parça Tabanlı Uçak, Roket & Drone Simülatörü</title>
+<style>
+  :root { --ui:#1d6feb; --ink:#16202a; --glass:rgba(255,255,255,.88); --line:rgba(22,32,42,.14);
+          --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px);
+          --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px); }
+  * { box-sizing:border-box; touch-action:none; user-select:none; -webkit-user-select:none;
+      -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent; }
+  html, body { margin:0; padding:0; width:100%; height:100%; min-height:100%; overflow:hidden; overscroll-behavior:none;
+      background:#cfe0f0; color:var(--ink);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  #canvas-container { position:fixed; inset:0; width:100vw; height:100dvh; }
+  canvas { display:block; }
+
+  .panel { background:var(--glass); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+      border:1px solid var(--line); border-radius:14px; padding:6px 8px; display:flex; flex-wrap:wrap;
+      gap:6px; align-items:center; box-shadow:0 4px 16px rgba(0,0,0,.08); }
+  button { border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:10px;
+      padding:8px 12px; min-height:40px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;
+      touch-action:manipulation; pointer-events:auto; position:relative; z-index:1; }
+  button:active { transform:scale(.97); }
+  button.on { background:var(--ui); color:#fff; border-color:var(--ui); }
+  button.danger { background:#d93829; color:#fff; border-color:#d93829; }
+  button.small { padding:4px 10px; min-height:34px; }
+  .hidden { display:none !important; }
+
+  #topbar { position:fixed; z-index:30; left:calc(8px + var(--sal)); right:calc(8px + var(--sar)); top:calc(8px + var(--sat));
+      display:flex; justify-content:space-between; gap:8px; pointer-events:none; flex-wrap:wrap; }
+  #topbar .panel { pointer-events:auto; }
+
+  #info { position:fixed; z-index:25; left:calc(8px + var(--sal)); top:calc(64px + var(--sat)); max-width:330px;
+      font-size:12px; line-height:1.5; font-weight:600; pointer-events:none; display:block; }
+  #info b.good { color:#13803a; } #info b.warn { color:#b86a00; } #info b.bad { color:#c62828; }
+
+  #flybar { position:fixed; z-index:30; left:50%; transform:translateX(-50%); top:calc(64px + var(--sat));
+      justify-content:center; max-width:calc(100vw - 16px); }
+  #flybar button { padding:6px 10px; min-height:36px; font-size:12px; }
+
+  .dock { position:fixed; z-index:30; left:calc(8px + var(--sal)); right:calc(8px + var(--sar));
+      bottom:calc(8px + var(--sab)); display:flex; gap:14px; align-items:flex-start; flex-wrap:nowrap;
+      max-height:42vh; overflow:auto; }
+  .dock, .dock * { touch-action:pan-y; }
+  .dock-col { display:flex; flex-direction:column; gap:6px; min-width:210px; flex:1 1 210px; }
+  .dock-title { font-size:11px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:#425264; }
+  /* iPad Safari: panel itself stays fixed; only the list is the scroll container. */
+  #parts-panel { position:fixed; z-index:80; right:calc(8px + var(--sar)); top:calc(64px + var(--sat));
+      bottom:calc(8px + var(--sab)); width:190px; height:auto; max-height:none; min-height:0;
+      display:flex; flex-direction:column; flex-wrap:nowrap; align-items:stretch;
+      overflow:hidden; overscroll-behavior:none; gap:6px; padding:9px; }
+  #parts-panel, #parts-panel * { touch-action:pan-y; }
+  #parts-panel { pointer-events:auto; }
+  #part-buttons { pointer-events:auto; }
+  #parts-panel .dock-title { flex:0 0 auto; position:relative; z-index:2; background:rgba(255,255,255,.96); padding:3px 0 6px; }
+  #part-buttons { display:flex; flex:1 1 0%; min-height:0; height:0; min-width:0; flex-direction:column; gap:5px;
+      overflow-y:scroll; overflow-x:hidden; -webkit-overflow-scrolling:touch;
+      overscroll-behavior-y:contain; touch-action:pan-y; padding:0 3px 18px 0; }
+  #part-buttons button, #part-buttons h4 { flex:0 0 auto; }
+  #part-buttons h4 { flex:0 0 auto; margin:8px 0 2px; font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#6b7a8c; }
+  #part-buttons button { display:flex; flex:0 0 auto; align-items:center; gap:8px; width:100%; text-align:left; padding:7px 8px; min-height:40px; font-size:12px; }
+  #part-buttons i { flex:none; width:14px; height:14px; border-radius:50%; border:1px solid rgba(0,0,0,.25); }\n  #part-buttons::-webkit-scrollbar { width:5px; }\n  #part-buttons::-webkit-scrollbar-thumb { background:rgba(60,80,105,.38); border-radius:8px; }
+  #build-dock { right:calc(206px + var(--sar)); flex-direction:column; align-items:stretch; gap:4px; max-height:36dvh; padding:6px 8px; overflow:hidden; }
+  #build-dock.collapsed { right:auto; }
+  #dock-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  #dock-body { display:flex; gap:12px; overflow:auto; align-items:flex-start; }
+  #build-dock.collapsed #dock-body { display:none; }
+  #build-dock button { min-height:32px; padding:4px 9px; font-size:12px; }
+  #build-dock .dock-col { min-width:150px; flex:1 1 150px; gap:4px; }
+  .wrap { display:flex; flex-wrap:wrap; gap:6px; }
+  .move-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .move-grid button { padding:6px 4px; }
+
+  /* Uçuş ekranı: görüş alanının ortası tamamen boş bırakılır. */
+  #hud { position:fixed; z-index:25; left:0; right:0; bottom:calc(8px + var(--sab));
+      display:flex; justify-content:space-between; align-items:flex-end;
+      padding:0 calc(10px + var(--sar)) 0 calc(10px + var(--sal)); pointer-events:none; }
+  #sticks-wrap { display:flex; justify-content:space-between; width:100%; pointer-events:none; align-items:flex-end; }
+  #telemetry { position:fixed; z-index:24; top:calc(58px + var(--sat)); right:calc(10px + var(--sar));
+      display:block; padding:5px 8px; min-width:0; border:0; border-radius:8px;
+      background:rgba(12,20,30,.24); color:#fff; text-shadow:0 1px 3px #17202b;
+      font-size:10px; font-weight:700; line-height:1.45; white-space:pre;
+      font-variant-numeric:tabular-nums; pointer-events:none; box-shadow:none; }
+  .stick { position:relative; width:112px; height:112px; border-radius:50%; pointer-events:auto;
+      background:rgba(15,25,38,.08); border:1px solid rgba(255,255,255,.25);
+      box-shadow:none; opacity:.24; transition:opacity .15s, background .15s; }
+  .stick:active { opacity:.92; background:rgba(15,25,38,.35); }
+  .stick::before, .stick::after { content:""; position:absolute; background:rgba(255,255,255,.22); }
+  .stick::before { left:50%; top:10px; bottom:10px; width:1px; margin-left:-.5px; }
+  .stick::after  { top:50%; left:10px; right:10px; height:1px; margin-top:-.5px; }
+  .stick .lab { position:absolute; left:0; right:0; bottom:-15px; text-align:center; font-size:9px; font-weight:700; color:rgba(255,255,255,.72); text-shadow:0 1px 3px #17202b; }
+  .knob { position:absolute; width:42px; height:42px; left:calc(50% - 21px); top:calc(50% - 21px); border-radius:50%;
+      background:rgba(65,145,255,.34); border:1px solid rgba(255,255,255,.35); box-shadow:none; }
+  body.flight-mode #topbar > .panel:last-child { display:none; }
+  body.flight-mode #flybar { left:auto; right:calc(8px + var(--sar)); top:calc(8px + var(--sat)); transform:none;
+      max-width:min(66vw, 560px); padding:4px; background:rgba(12,20,30,.28); border-color:rgba(255,255,255,.12); box-shadow:none; }
+  body.flight-mode #flybar button { min-height:30px; padding:4px 7px; font-size:10px; background:rgba(255,255,255,.78); }
+  body.flight-mode #flybar button.on { background:rgba(29,111,235,.85); color:#fff; }
+  @media (max-width:900px) {
+    #parts-panel { width:clamp(180px, 23vw, 220px); top:calc(62px + var(--sat)); bottom:calc(8px + var(--sab)); }
+    #build-dock { right:calc(clamp(186px, 24vw, 221px) + var(--sar)); max-height:38dvh; }
+  }
+  @media (max-height:820px) and (min-width:701px) {
+    #parts-panel { top:calc(58px + var(--sat)); bottom:calc(7px + var(--sab)); }
+    #build-dock { max-height:40dvh; }
+  }
+  @media (max-width:700px) {
+    #parts-panel { width:clamp(168px, 34vw, 205px); top:calc(58px + var(--sat)); bottom:calc(8px + var(--sab)); }
+    #build-dock { right:calc(174px + var(--sar)); max-height:36dvh; }
+    .stick { width:86px; height:86px; opacity:.18; }
+    .knob { width:34px; height:34px; left:calc(50% - 17px); top:calc(50% - 17px); }
+    .stick .lab { font-size:8px; bottom:-13px; }
+    body.flight-mode #flybar { max-width:calc(100vw - 105px); }
+    body.flight-mode #flybar button { min-height:27px; padding:3px 5px; font-size:9px; }
+    #telemetry { font-size:9px; top:calc(54px + var(--sat)); }
+  }
+
+  #overlay { position:fixed; z-index:40; left:50%; top:42%; transform:translate(-50%,-50%); text-align:center;
+      padding:14px 22px; font-size:15px; font-weight:800; }
+  #toast { position:fixed; z-index:60; left:50%; bottom:calc(46vh + var(--sab)); transform:translateX(-50%);
+      background:rgba(22,32,42,.92); color:#fff; padding:8px 14px; border-radius:10px; font-size:13px;
+      font-weight:600; pointer-events:none; opacity:0; transition:opacity .25s; max-width:90vw; text-align:center; }
+  #toast.show { opacity:1; }
+  #stall { position:fixed; z-index:35; left:50%; top:calc(110px + var(--sat)); transform:translateX(-50%);
+      background:#d93829; color:#fff; font-weight:800; padding:4px 14px; border-radius:8px; font-size:13px; }
+</style>
+</head>
+<body>
+<div id="canvas-container"></div>
+
+<div id="topbar">
+  <div class="panel">
+    <strong style="font-size:13px">Hangar</strong>
+    <button id="btn-build" class="on">🛠 İnşa</button>
+    <button id="btn-fly">✈️ Uçuş</button>
+  </div>
+  <div class="panel">
+    <button id="btn-zoom-in" class="small">＋</button>
+    <button id="btn-zoom-out" class="small">－</button>
+  </div>
+</div>
+
+<div id="info" class="panel"></div>
+
+<div id="flybar" class="panel hidden">
+  <button id="btn-cam">📷 Pilot</button>
+  <button id="btn-assist" class="on">Asistan</button>
+  <button id="btn-acro" class="hidden">ANGLE</button>
+  <button id="btn-althold" class="hidden on">İrtifa Tut</button>
+  <button id="btn-pinv">Pitch Ters</button>
+  <button id="btn-wind">🌬 Rüzgâr: Yok</button>
+  <button id="btn-sound">🔊</button>
+  <button id="btn-brake">Fren</button>
+  <button id="btn-resetfly" class="danger">↺ Sıfırla</button>
+</div>
+
+<div id="stall" class="hidden">STALL – burnu indir!</div>
+<div id="overlay" class="panel hidden"></div>
+<div id="toast"></div>
+
+<div id="parts-panel" class="panel"><div class="dock-title">Parçalar</div><div id="part-buttons"></div></div>
+
+<div id="build-dock" class="dock panel">
+  <div id="dock-head"><span class="dock-title" id="sel-title">Seçili parça: —</span><button id="dock-toggle" class="small">▾ Gizle</button></div>
+  <div id="dock-body">
+    <div class="dock-col">
+      <div class="dock-title">Model</div>
+      <div class="wrap">
+        <button data-preset="plane">Uçak</button><button data-preset="quad">Quad</button><button data-preset="empty">Boş</button>
+        <button id="btn-save">💾</button><button id="btn-load">📂</button>
+      </div>
+      <div class="dock-title">Hareket adımı</div>
+      <div class="wrap"><button data-step="0.02" class="small">2 cm</button><button data-step="0.05" class="small">5 cm</button><button data-step="0.1" class="small on">10 cm</button><button data-step="0.25" class="small">25 cm</button></div>
+    </div>
+    <div class="dock-col">
+      <div class="dock-title">Konum</div>
+      <div class="move-grid">
+        <button data-mv="x-">← Sol</button><button data-mv="x+">Sağ →</button>
+        <button data-mv="y+">↑ Yukarı</button><button data-mv="y-">↓ Aşağı</button>
+        <button data-mv="z-">▲ Burun</button><button data-mv="z+">▼ Kuyruk</button>
+      </div>
+    </div>
+    <div class="dock-col">
+      <div class="dock-title">Düzenle</div>
+      <div class="wrap">
+        <button data-rot="x">⟳X</button><button data-rot="y">⟳Y</button><button data-rot="z">⟳Z</button>
+        <button id="btn-size-" class="small">Boyut −</button><button id="btn-size+" class="small">Boyut ＋</button>
+        <button id="btn-mirror">⇋ Aynala</button><button id="btn-dup">⧉ Çoğalt</button>
+      </div>
+      <div class="dock-title">Araçlar</div>
+      <div class="wrap">
+        <button id="btn-undo">↶ Geri al</button><button id="btn-center">⊕ Ortala</button><button id="btn-match">◎ Çapı eşle</button>
+        <button id="btn-snap" class="on">🧲 Yapış</button><button id="btn-delete" class="danger">🗑 Sil</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="hud" class="hidden">
+  <div id="sticks-wrap">
+    <div class="stick" id="stick-left"><div class="knob" id="knob-left"></div><div class="lab">GAZ · YAW</div></div>
+    <div class="stick" id="stick-right"><div class="knob" id="knob-right"></div><div class="lab">PITCH · ROLL</div></div>
+  </div>
+</div>
+<div id="telemetry" class="hidden"></div>
+
+
+<script>
+(function loadThree(index) {
+  const sources = [
+    'https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js',
+    'https://unpkg.com/three@0.149.0/build/three.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/three.js/149/three.min.js',
+    'https://threejs.org/build/three.min.js'
+  ];
+  if (index >= sources.length) {
+    showBootError(new Error('Three.js hiçbir kaynaktan yüklenemedi. İnternet bağlantısını kontrol edip yeniden dene.'));
+    return;
+  }
+  const script = document.createElement('script');
+  script.src = sources[index];
+  script.onload = function () {
+    try { startHangar(); }
+    catch (err) { showBootError(err); }
+  };
+  script.onerror = function () { loadThree(index + 1); };
+  document.head.appendChild(script);
+})();
+function showBootError(err) {
+  let box = document.getElementById('boot-error');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'boot-error';
+    box.style.cssText = 'position:fixed;z-index:99999;inset:12px;display:grid;place-content:center;gap:12px;padding:22px;background:rgba(12,20,30,.96);color:white;border:1px solid #718096;border-radius:16px;text-align:center;font:600 15px/1.5 system-ui;white-space:pre-wrap';
+    document.body.appendChild(box);
+  }
+  const msg = String(err && (err.stack || err.message) || err).slice(0, 1800);
+  box.innerHTML = '';
+  const title = document.createElement('strong'); title.textContent = 'Hangar başlatılamadı';
+  const detail = document.createElement('div'); detail.textContent = msg;
+  const retry = document.createElement('button'); retry.textContent = '↻ Yeniden dene';
+  retry.style.cssText = 'padding:12px 18px;background:#1d6feb;color:white;border:0;border-radius:10px;font:700 15px system-ui';
+  retry.onclick = () => { box.remove(); loadThree(0); };
+  box.append(title, detail, retry);
+}
+window.addEventListener('error', e => {
+  const msg = e && e.message ? e.message : 'Bilinmeyen çalışma hatası';
+  let bar = document.getElementById('runtime-error');
+  if (!bar) {
+    bar = document.createElement('div'); bar.id = 'runtime-error';
+    bar.style.cssText = 'position:fixed;z-index:99998;left:8px;right:8px;top:8px;padding:9px 12px;border-radius:10px;background:#9f241d;color:white;font:600 12px/1.4 system-ui;white-space:pre-wrap';
+    document.body.appendChild(bar);
+  }
+  bar.textContent = 'Çalışma hatası: ' + msg;
+});
+function startHangar() {
+
+const THREE = window.THREE;
+if (!THREE) { document.getElementById('canvas-container').innerHTML = '<div style="position:absolute;inset:0;display:grid;place-content:center;text-align:center;padding:24px;font:600 16px system-ui;color:#243449">3D kütüphanesi yüklenemedi. İnternet bağlantısını kontrol edip yeniden aç.</div>'; throw new Error('Three.js yüklenemedi'); }
+
+// ==== PHYSICS CORE BEGIN ====
+// Eksen düzeni (gövde ve dünya): +X sağ, +Y yukarı, burun = -Z, kuyruk = +Z
+const G = 9.81, RHO = 1.225;
+const STALL_AOA = 0.30;               // rad (~17°)
+const K_ELEV = 0.25, K_AIL = 0.12, K_RUD = 0.25;   // kontrol yüzeyi sapma (rad)
+const K_YAWREACT = 0.05;              // rotor reaksiyon torku katsayısı (m)
+
+const clamp = (x, a, b) => x < a ? a : (x > b ? b : x);
+const vadd = (a, b) => [a[0]+b[0], a[1]+b[1], a[2]+b[2]];
+const vsub = (a, b) => [a[0]-b[0], a[1]-b[1], a[2]-b[2]];
+const vmul = (a, s) => [a[0]*s, a[1]*s, a[2]*s];
+const vdot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+const vcross = (a, b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+const vlen = a => Math.sqrt(vdot(a, a));
+const vnorm = a => { const l = vlen(a) || 1; return [a[0]/l, a[1]/l, a[2]/l]; };
+const qmul = (a, b) => [
+  a[3]*b[0] + a[0]*b[3] + a[1]*b[2] - a[2]*b[1],
+  a[3]*b[1] - a[0]*b[2] + a[1]*b[3] + a[2]*b[0],
+  a[3]*b[2] + a[0]*b[1] - a[1]*b[0] + a[2]*b[3],
+  a[3]*b[3] - a[0]*b[0] - a[1]*b[1] - a[2]*b[2]];
+const qrot = (q, v) => { const u = [q[0], q[1], q[2]]; const t = vmul(vcross(u, v), 2);
+  return vadd(vadd(v, vmul(t, q[3])), vcross(u, t)); };
+const qinv = q => [-q[0], -q[1], -q[2], q[3]];
+const qrotInv = (q, v) => qrot(qinv(q), v);
+const qaxis = (ax, ang) => { const s = Math.sin(ang/2), n = vnorm(ax); return [n[0]*s, n[1]*s, n[2]*s, Math.cos(ang/2)]; };
+const qnorm = q => { const l = Math.hypot(q[0], q[1], q[2], q[3]) || 1; return [q[0]/l, q[1]/l, q[2]/l, q[3]/l]; };
+const smooth01 = (x, a, b) => { const t = clamp((x-a)/(b-a), 0, 1); return t*t*(3-2*t); };
+
+// Parça kataloğu: dims = [x genişlik, y yükseklik, z uzunluk] (metre), mass = kg
+const PART_DEFS = {
+  fuselage:   { k:'fus', label:'Gövde',          dims:[0.36,0.36,1.4], mass:1.3, color:0xf2f4f7, sh:'fus' },
+  slim:       { k:'fus', label:'İnce Gövde',     dims:[0.2,0.22,1.6],  mass:0.6, color:0xe5e7eb, sh:'slim' },
+  tailcone:   { k:'fus', label:'Kuyruk Konisi',  dims:[0.36,0.36,0.7], mass:0.3, color:0xf2f4f7, sh:'tailcone' },
+  nose:       { k:'fus', label:'Burun Konisi',   dims:[0.34,0.34,0.5], mass:0.25,color:0xdc2626, sh:'nose' },
+  tank:       { k:'fus', label:'Yakıt Tankı',    dims:[0.4,0.4,0.9],   mass:1.0, color:0xf8fafc, sh:'tank' },
+  pod:        { k:'fus', label:'Kapsül',         dims:[0.5,0.45,0.7],  mass:0.8, color:0xcbd5e1, sh:'pod' },
+  cockpit:    { k:'fus', label:'Kokpit Kanopi',  dims:[0.3,0.25,0.6],  mass:0.2, color:0x7dd3fc, sh:'canopy' },
+  battery:    { k:'fus', label:'Batarya',        dims:[0.14,0.1,0.32], mass:0.5, color:0xfacc15, sh:'pill' },
+  camera:     { k:'fus', label:'Kamera Küresi',  dims:[0.12,0.12,0.12],mass:0.12,color:0x111827, sh:'ball' },
+  wing:       { k:'wing', label:'Kanat',         dims:[3.0,0.05,0.45], mass:1.2, color:0xf57c00, taper:0.65, sw:0.3 },
+  rect:       { k:'wing', label:'Düz Kanat',     dims:[2.4,0.06,0.5],  mass:1.0, color:0xfbbf24, taper:1,    sw:0 },
+  swept:      { k:'wing', label:'Ok Kanat',      dims:[2.2,0.045,0.6], mass:0.9, color:0x94a3b8, taper:0.35, sw:0.9, af:0.8 },
+  delta:      { k:'wing', label:'Delta Kanat',   dims:[1.6,0.05,0.9],  mass:0.9, color:0xef4444, taper:0.04, sw:0.96,af:0.55 },
+  tail:       { k:'tail', label:'Yatay Kuyruk',  dims:[1.1,0.04,0.30], mass:0.2, color:0x2b3440, taper:0.7, sw:0.4 },
+  canard:     { k:'tail', label:'Canard',        dims:[0.8,0.035,0.2], mass:0.15,color:0x475569, taper:0.6, sw:0.5 },
+  fin:        { k:'fin',  label:'Dikey Kuyruk',  dims:[0.04,0.5,0.35], mass:0.12,color:0x2b3440, taper:0.55,sw:0.7 },
+  fin_big:    { k:'fin',  label:'Büyük Dikme',   dims:[0.05,0.8,0.5],  mass:0.2, color:0x1d4ed8, taper:0.4, sw:1.1 },
+  prop_motor: { k:'prop', label:'Pervane Motor', dims:[0.7,0.7,0.3],   mass:0.9, color:0x374151, thrust:38, tau:0.15, sh:'prop' },
+  jet:        { k:'prop', label:'Jet Motor',     dims:[0.3,0.3,0.9],   mass:1.4, color:0x9ca3af, thrust:220, tau:0.32, sh:'jet' },
+  rocket:     { k:'prop', label:'Roket Motor',   dims:[0.34,0.34,0.6], mass:1.6, color:0x64748b, thrust:130,tau:0.12, sh:'rocket' },
+  rotor:      { k:'rotor',label:'Drone Rotor',   dims:[0.45,0.12,0.45],mass:0.3, color:0x374151, thrust:12, tau:0.04, sh:'rotor' },
+  rotor_big:  { k:'rotor',label:'Büyük Rotor',   dims:[0.75,0.14,0.75],mass:0.55,color:0x1f2937, thrust:26, tau:0.07, sh:'rotor' },
+  frame:      { k:'frame',label:'Drone Gövde',   dims:[0.5,0.12,0.5],  mass:0.9, color:0x1f2937, sh:'frame' },
+  arm:        { k:'arm',  label:'Drone Kol',     dims:[1.0,0.04,0.07], mass:0.1, color:0x6b7280, sh:'arm' },
+  gear:       { k:'gear', label:'İniş Takımı',   dims:[0.06,0.45,0.06],mass:0.15,color:0x1f2937, sh:'gear' },
+  // Yeni gövde ve uzay aracı parçaları
+  fuselage_long:{ k:'fus', label:'Uzun Gövde', dims:[0.42,0.42,2.1], mass:1.8, color:0xe2e8f0, sh:'fus' },
+  fuel_large:{ k:'fus', label:'Büyük Yakıt Tankı', dims:[0.58,0.58,1.45], mass:1.8, color:0xf8fafc, sh:'tank' },
+  fuel_small:{ k:'fus', label:'Küçük Yakıt Tankı', dims:[0.28,0.28,0.65], mass:0.55, color:0xdbeafe, sh:'tank' },
+  cargo_pod:{ k:'fus', label:'Kargo Modülü', dims:[0.62,0.62,0.85], mass:2.2, color:0x94a3b8, sh:'pod' },
+  crew_capsule:{ k:'fus', label:'Mürettebat Kapsülü', dims:[0.72,0.72,0.9], mass:2.6, color:0xcbd5e1, sh:'pod' },
+  nose_sharp:{ k:'fus', label:'Sivri Burun', dims:[0.3,0.3,0.72], mass:0.22, color:0xf97316, sh:'nose' },
+  battery_large:{ k:'fus', label:'Yüksek Kapasiteli Batarya', dims:[0.22,0.16,0.48], mass:1.0, color:0xfacc15, sh:'pill' },
+  sensor:{ k:'fus', label:'Bilim Sensörü', dims:[0.18,0.18,0.22], mass:0.18, color:0x38bdf8, sh:'ball' },
+  // Yeni kanat profilleri
+  wing_large:{ k:'wing', label:'Geniş Kanat', dims:[4.2,0.07,0.62], mass:1.8, color:0xf59e0b, taper:0.72, sw:0.18 },
+  wing_short:{ k:'wing', label:'Kısa Kanat', dims:[1.55,0.055,0.42], mass:0.65, color:0xfb923c, taper:0.82, sw:0.12 },
+  wing_sst:{ k:'wing', label:'Süpersonik Kanat', dims:[2.7,0.045,0.72], mass:1.05, color:0x64748b, taper:0.08, sw:1.18, af:0.62 },
+  tail_large:{ k:'tail', label:'Geniş Yatay Kuyruk', dims:[1.65,0.05,0.38], mass:0.32, color:0x334155, taper:0.72, sw:0.32 },
+  fin_twin:{ k:'fin', label:'Çift Dikey Kanat', dims:[0.05,0.62,0.42], mass:0.24, color:0x2563eb, taper:0.48, sw:0.82 },
+  // İtki seçenekleri
+  prop_large:{ k:'prop', label:'Çift Pervaneli Motor', dims:[0.95,0.95,0.38], mass:1.35, color:0x475569, thrust:58, tau:0.18, sh:'prop' },
+  turbofan:{ k:'prop', label:'Yüksek İtkili Turbofan', dims:[0.48,0.48,1.12], mass:2.1, color:0x94a3b8, thrust:360, tau:0.38, sh:'jet' },
+  ion_engine:{ k:'prop', label:'İyon Motoru', dims:[0.42,0.42,0.58], mass:0.85, color:0x7c3aed, thrust:18, tau:0.8, sh:'rocket' },
+  booster:{ k:'prop', label:'Güçlendirici Roket', dims:[0.52,0.52,1.35], mass:2.8, color:0xdc2626, thrust:230, tau:0.1, sh:'rocket' },
+  // Drone ve iniş ekipmanları
+  rotor_xl:{ k:'rotor', label:'XL Drone Roturu', dims:[1.05,0.16,1.05], mass:0.82, color:0x111827, thrust:42, tau:0.08, sh:'rotor' },
+  drone_arm_long:{ k:'arm', label:'Uzun Drone Kolu', dims:[1.45,0.05,0.085], mass:0.16, color:0x64748b, sh:'arm' },
+  landing_wide:{ k:'gear', label:'Geniş İniş Ayağı', dims:[0.08,0.58,0.08], mass:0.22, color:0x334155, sh:'gear' },
+
+  // KSP tarzı genişletilmiş uçak parçaları
+  wing_sport:{ k:'wing', label:'Spor Uçak Kanadı', dims:[3.25,0.055,0.48], mass:1.05, color:0xfbbf24, taper:0.82, sw:0.08 },
+  wing_glider:{ k:'wing', label:'Planör Uzun Kanadı', dims:[5.4,0.045,0.42], mass:1.35, color:0xe2e8f0, taper:0.9, sw:0.04 },
+  wing_biplane:{ k:'wing', label:'Çift Kanatlı Üst Kanat', dims:[2.5,0.06,0.42], mass:0.95, color:0xdc8b35, taper:0.95, sw:0.02 },
+  wing_stubby:{ k:'wing', label:'Kısa Yüksek Manevra Kanadı', dims:[1.9,0.07,0.68], mass:0.82, color:0xf97316, taper:0.55, sw:0.55 },
+  wing_heavy:{ k:'wing', label:'Ağır Nakliye Kanadı', dims:[4.8,0.09,0.9], mass:2.6, color:0x94a3b8, taper:0.68, sw:0.22 },
+  wing_micro:{ k:'wing', label:'Mikro Kanat', dims:[1.1,0.035,0.28], mass:0.28, color:0xfacc15, taper:0.75, sw:0.1 },
+  wing_forward:{ k:'wing', label:'İleri Ok Açılı Kanat', dims:[2.65,0.05,0.64], mass:1.1, color:0x60a5fa, taper:0.62, sw:-0.48 },
+  wing_cranked:{ k:'wing', label:'Kırık Ok Kanat', dims:[3.1,0.055,0.7], mass:1.3, color:0x64748b, taper:0.38, sw:0.72 },
+  wing_folding:{ k:'wing', label:'Katlanır Kanat Modülü', dims:[2.7,0.06,0.52], mass:1.15, color:0x64748b, taper:0.72, sw:0.16 },
+  tail_v:{ k:'tail', label:'V Kuyruk Yüzeyi', dims:[1.25,0.045,0.34], mass:0.28, color:0x475569, taper:0.62, sw:0.5 },
+  tail_t:{ k:'tail', label:'T Kuyruk Yüzeyi', dims:[1.35,0.045,0.34], mass:0.3, color:0x334155, taper:0.7, sw:0.3 },
+  tail_small:{ k:'tail', label:'Küçük Yatay Stabilizör', dims:[0.72,0.035,0.22], mass:0.12, color:0x64748b, taper:0.72, sw:0.24 },
+  fin_large:{ k:'fin', label:'Yüksek Dikey Stabilizör', dims:[0.055,1.05,0.52], mass:0.32, color:0x1d4ed8, taper:0.48, sw:0.72 },
+  fin_ventral:{ k:'fin', label:'Alt Karın Kanadı', dims:[0.045,0.42,0.28], mass:0.12, color:0x475569, taper:0.5, sw:0.55 },
+  fin_small:{ k:'fin', label:'Küçük Dikey Kanatçık', dims:[0.035,0.32,0.2], mass:0.07, color:0x64748b, taper:0.55, sw:0.5 },
+  fuselage_wide:{ k:'fus', label:'Geniş Kabin Gövdesi', dims:[0.62,0.58,1.8], mass:2.4, color:0xe5e7eb, sh:'fus' },
+  fuselage_narrow:{ k:'fus', label:'Dar Hızlı Gövde', dims:[0.25,0.26,1.9], mass:0.82, color:0xcbd5e1, sh:'slim' },
+  cockpit_wide:{ k:'fus', label:'Geniş Panoramik Kokpit', dims:[0.48,0.34,0.82], mass:0.38, color:0x7dd3fc, sh:'canopy' },
+  cockpit_fighter:{ k:'fus', label:'Savaş Uçağı Kanopisi', dims:[0.34,0.3,0.72], mass:0.3, color:0x38bdf8, sh:'canopy' },
+  nose_blunt:{ k:'fus', label:'Küt Burun Radomu', dims:[0.48,0.42,0.38], mass:0.3, color:0xe2e8f0, sh:'nose' },
+  nose_airliner:{ k:'fus', label:'Yolcu Uçağı Burnu', dims:[0.5,0.48,0.62], mass:0.42, color:0xf8fafc, sh:'nose' },
+  fuselage_rear:{ k:'fus', label:'Arka Gövde Uzatması', dims:[0.36,0.36,1.05], mass:0.72, color:0xd1d5db, sh:'tailcone' },
+  fuel_wing:{ k:'fus', label:'Kanat Yakıt Tankı', dims:[0.24,0.24,0.82], mass:0.62, color:0xfde68a, sh:'tank' },
+  cargo_bay:{ k:'fus', label:'Dahili Kargo Bölmesi', dims:[0.52,0.42,1.0], mass:1.4, color:0x94a3b8, sh:'pod' },
+  radar_dome:{ k:'fus', label:'Radar Kubbesi', dims:[0.34,0.32,0.42], mass:0.28, color:0x60a5fa, sh:'ball' },
+  jet_small:{ k:'prop', label:'Kompakt Jet Motoru', dims:[0.26,0.26,0.62], mass:0.82, color:0x9ca3af, thrust:155, tau:0.30, sh:'jet' },
+  jet_heavy:{ k:'prop', label:'Ağır Jet Motoru', dims:[0.62,0.62,1.28], mass:3.2, color:0x64748b, thrust:520, tau:0.42, sh:'jet' },
+  turboprop:{ k:'prop', label:'Turboprop Motor', dims:[0.58,0.58,0.48], mass:1.55, color:0x475569, thrust:72, tau:0.24, sh:'prop' },
+  prop_pusher:{ k:'prop', label:'İtici Pervane Motoru', dims:[0.62,0.62,0.32], mass:0.95, color:0x334155, thrust:46, tau:0.16, sh:'prop' },
+  prop_tractor:{ k:'prop', label:'Çekici Pervane Motoru', dims:[0.72,0.72,0.34], mass:1.05, color:0x374151, thrust:54, tau:0.16, sh:'prop' },
+  engine_nacelle:{ k:'fus', label:'Motor Nacelle Kaportası', dims:[0.48,0.48,1.05], mass:0.8, color:0x9ca3af, sh:'tank' },
+  gear_nose:{ k:'gear', label:'Ön İniş Takımı', dims:[0.055,0.38,0.055], mass:0.13, color:0x374151, sh:'gear' },
+  gear_main:{ k:'gear', label:'Ana İniş Takımı', dims:[0.075,0.52,0.075], mass:0.24, color:0x1f2937, sh:'gear' },
+  gear_heavy:{ k:'gear', label:'Ağır Uçak İniş Takımı', dims:[0.12,0.72,0.12], mass:0.48, color:0x334155, sh:'gear' },
+  float_gear:{ k:'gear', label:'Deniz Uçağı Şamandırası', dims:[0.22,0.22,1.15], mass:0.42, color:0xffffff, sh:'gear' },
+  wingtip_tank:{ k:'fus', label:'Kanat Ucu Yakıt Tankı', dims:[0.18,0.18,0.62], mass:0.36, color:0xfde68a, sh:'tank' },
+  avionics_bay:{ k:'fus', label:'Aviyonik Bölmesi', dims:[0.3,0.24,0.42], mass:0.42, color:0x16a34a, sh:'pod' },
+  nose_sensor:{ k:'fus', label:'Burun Sensör Paketi', dims:[0.16,0.16,0.2], mass:0.12, color:0x38bdf8, sh:'ball' },
+
+  // Son paket: ilave gövde, kanat, motor ve iniş parçaları
+  fuselage_xl:{ k:'fus', label:'XL Nakliye Gövdesi', dims:[0.78,0.76,2.45], mass:3.8, color:0xe5e7eb, sh:'fus' },
+  fuselage_mini:{ k:'fus', label:'Mikro İHA Gövdesi', dims:[0.18,0.2,0.92], mass:0.34, color:0x64748b, sh:'slim' },
+  cockpit_bubble:{ k:'fus', label:'Baloncuk Kanopi', dims:[0.56,0.42,0.88], mass:0.46, color:0x7dd3fc, sh:'canopy' },
+  fuel_pod:{ k:'fus', label:'Harici Yakıt Podu', dims:[0.3,0.3,1.12], mass:0.72, color:0xfde68a, sh:'tank' },
+  science_probe:{ k:'fus', label:'Bilim Sondası', dims:[0.2,0.2,0.34], mass:0.2, color:0x22d3ee, sh:'ball' },
+  wing_xl:{ k:'wing', label:'XL Yüksek Kaldırma Kanadı', dims:[6.2,0.085,0.82], mass:3.1, color:0xf59e0b, taper:0.78, sw:0.12 },
+  wing_delta_xl:{ k:'wing', label:'XL Delta Kanat', dims:[3.4,0.07,1.28], mass:2.1, color:0xef4444, taper:0.05, sw:0.98, af:0.58 },
+  wing_forward_large:{ k:'wing', label:'Geniş İleri Ok Kanat', dims:[3.7,0.06,0.78], mass:1.7, color:0x60a5fa, taper:0.58, sw:-0.62 },
+  tail_canard_large:{ k:'tail', label:'Geniş Ön Kanard', dims:[1.15,0.045,0.3], mass:0.24, color:0x475569, taper:0.66, sw:0.48 },
+  fin_dual_small:{ k:'fin', label:'İkiz Küçük Dikey Kuyruk', dims:[0.04,0.42,0.3], mass:0.11, color:0x2563eb, taper:0.5, sw:0.55 },
+  turbofan_xl:{ k:'prop', label:'XL Turbofan', dims:[0.78,0.78,1.48], mass:4.6, color:0x64748b, thrust:850, tau:0.45, sh:'jet' },
+  rocket_vacuum:{ k:'prop', label:'Vakum Roket Motoru', dims:[0.48,0.48,0.9], mass:1.5, color:0x7c3aed, thrust:175, tau:0.16, sh:'rocket' },
+  prop_electric:{ k:'prop', label:'Elektrikli İtici Motor', dims:[0.52,0.52,0.34], mass:0.68, color:0x0f766e, thrust:32, tau:0.2, sh:'prop' },
+  rotor_coaxial:{ k:'rotor', label:'Koaksiyel Drone Rotörü', dims:[0.82,0.18,0.82], mass:0.68, color:0x1f2937, thrust:34, tau:0.07, sh:'rotor' },
+  gear_heavy_dual:{ k:'gear', label:'Çift Teker Ağır Takım', dims:[0.14,0.82,0.16], mass:0.62, color:0x334155, sh:'gear' },
+  float_large:{ k:'gear', label:'Büyük Deniz Şamandırası', dims:[0.28,0.3,1.48], mass:0.68, color:0xe2e8f0, sh:'gear' }
+};
+const WHEEL_R = 0.09;
+const ROUND = new Set(['fuselage','slim','tank','nose','tailcone']);   // dairesel kesitli, birbirine çap eşitlenen gövdeler
+function partDims(p) { const def = PART_DEFS[p.type], s = p.scale || 1, d = def.dims.map(v => v*s);
+  if (p.w) { d[1] = p.w*def.dims[1]/def.dims[0]; d[0] = p.w; } return d; }
+
+function rotDims(q, d) {
+  const ax = [qrot(q,[1,0,0]), qrot(q,[0,1,0]), qrot(q,[0,0,1])];
+  return [0,1,2].map(i => Math.abs(ax[0][i])*d[0] + Math.abs(ax[1][i])*d[1] + Math.abs(ax[2][i])*d[2]);
+}
+
+// Parça listesinden fiziksel model çıkarır (kütle, CG, atalet, yüzeyler, motorlar, temas noktaları)
+function analyzeCraft(parts) {
+  const C = { type:'none', mass:0, com:[0,0,0], I:[1,1,1], surfaces:[], motors:[], contacts:[], cda:[0,0,0],
+    nose:[0,0.05,-1], margin:null, np:null, cbar:0.3, wingArea:0, wingSpan:0, stallSpeed:null, tw:0,
+    nWheels:0, motorIndexByPart:{}, rotorIdx:[], rotorTmax:0, Sz2:0, Sx2:0, dih:0, hasWing:false };
+  if (!parts.length) return C;
+
+  let M = 0, c = [0,0,0]; const ms = [];
+  for (const p of parts) { const d = PART_DEFS[p.type], s = p.scale || 1, m = d.mass*s*s*(p.w ? (p.w/(d.dims[0]*s))**2 : 1);
+    ms.push(m); M += m; c = vadd(c, vmul(p.pos, m)); }
+  c = vmul(c, 1/M); C.mass = M; C.com = c;
+
+  let Ix = 0, Iy = 0, Iz = 0;
+  const surfaces = [];
+  const addSurf = (kind, center, n, cdir, S, AR) => {
+    const a = 2*Math.PI*AR/(AR+2);
+    surfaces.push({ kind, r: vsub(center, c), n, c: cdir, S, AR, a, cd0: 0.02, ail:0, elev:0, rud:0, wash:false, washDir:[0,0,-1] });
+  };
+
+  parts.forEach((p, i) => {
+    const def = PART_DEFS[p.type], s = p.scale || 1, m = ms[i];
+    const d = partDims(p), db = rotDims(p.q, d);
+    const r = vsub(p.pos, c);
+    Ix += m*(r[1]*r[1] + r[2]*r[2] + (db[1]*db[1] + db[2]*db[2])/12);
+    Iy += m*(r[0]*r[0] + r[2]*r[2] + (db[0]*db[0] + db[2]*db[2])/12);
+    Iz += m*(r[0]*r[0] + r[1]*r[1] + (db[0]*db[0] + db[1]*db[1])/12);
+
+    const fwd = qrot(p.q, [0,0,-1]);
+    if (def.k === 'wing' || def.k === 'tail') {
+      const span = d[0], chord = d[2], S = span*chord*(def.af||1), AR = span/chord/(def.af||1);
+      const n = qrot(p.q, [0,1,0]), sp = qrot(p.q, [1,0,0]);
+      for (const sg of [-1, 1]) {
+        const ctr = vadd(vadd(p.pos, vmul(sp, sg*span/4)), vmul(fwd, chord*0.25));
+        addSurf(def.k, ctr, n, fwd, S/2, AR);
+      }
+      if (def.k === 'wing') { C.wingArea += S; C.wingSpan += span; C.hasWing = true; }
+    } else if (def.k === 'fin') {
+      const span = d[1], chord = d[2];
+      const n = qrot(p.q, [1,0,0]);
+      addSurf('fin', vadd(p.pos, vmul(fwd, chord*0.25)), n, fwd, span*chord, Math.max(0.8, span/chord));
+    } else {
+      // gövde benzeri parçaların gövde sürüklemesi
+      const cdAxial = def.k === 'fus' ? 0.25 : 0.6, cdCross = def.k === 'fus' ? 0.8 : 0.9;
+      C.cda[0] += db[1]*db[2]*cdCross;
+      C.cda[1] += db[0]*db[2]*cdCross;
+      C.cda[2] += db[0]*db[1]*cdAxial;
+    }
+
+    if (def.k === 'prop' || def.k === 'rotor') {
+      const dir = def.k === 'rotor' ? qrot(p.q, [0,1,0]) : qrot(p.q, [0,0,-1]);
+      const mo = { partId:p.id, kind: def.k, engineShape:def.sh || '', r, dir, Tmax: def.thrust*s*s, tau: def.tau, spin:0 };
+      C.motorIndexByPart[p.id] = C.motors.length;
+      C.motors.push(mo);
+    }
+
+    // temas noktaları
+    if (def.k === 'gear') {
+      const h = d[1];
+      const cr = vsub(vadd(p.pos, qrot(p.q, [0,-h,0])), c);
+      C.contacts.push({ r: cr, radius: WHEEL_R*s, kind:'wheel', steer:false, k:0, cd:0 });
+    } else {
+      for (const sx of [-1,1]) for (const sy of [-1,1]) for (const sz of [-1,1]) {
+        const cr = vsub(vadd(p.pos, qrot(p.q, [sx*d[0]/2, sy*d[1]/2, sz*d[2]/2])), c);
+        C.contacts.push({ r: cr, radius: 0.015, kind:'hit', steer:false, k:0, cd:0 });
+        const fz = -cr[2];
+        if (fz > -C.nose[2] - 1e-6 || C.nose[2] === -1 && fz > 1) C.nose = [0, 0.05, cr[2]];
+      }
+    }
+  });
+  C.I = [Math.max(0.02, Ix), Math.max(0.02, Iy), Math.max(0.02, Iz)];
+
+  // Kontrol yüzeyi atamaları
+  const hasTail = surfaces.some(s => s.kind === 'tail');
+  for (const s of surfaces) {
+    const ny = s.n[1], nx = s.n[0];
+    if (s.kind === 'wing') {
+      if (Math.abs(ny) > 0.7 && Math.abs(s.r[0]) > 0.15) s.ail = -Math.sign(s.r[0]) * Math.sign(ny);
+      if (!hasTail && Math.abs(ny) > 0.7 && s.r[2] > 0.15) s.elev = -Math.sign(ny);   // uçan kanat: elevon
+    } else {
+      if (Math.abs(ny) > 0.7) s.elev = -Math.sign(ny);
+      if (Math.abs(nx) > 0.7) s.rud = -Math.sign(nx);
+    }
+  }
+  C.surfaces = surfaces;
+
+  // Pervane akışı (slipstream) alan yüzeyler
+  for (const mo of C.motors) {
+    if (mo.kind !== 'prop') continue;
+    for (const s of surfaces) {
+      const rel = vsub(s.r, mo.r), along = vdot(rel, mo.dir);
+      const perp = vlen(vsub(rel, vmul(mo.dir, along)));
+      if (along < -0.3 && perp < 1.2) { s.wash = true; s.washDir = mo.dir; }
+    }
+  }
+
+  // Temas yay/sönüm sabitleri
+  const wheels = C.contacts.filter(k => k.kind === 'wheel'), hits = C.contacts.filter(k => k.kind === 'hit');
+  C.nWheels = wheels.length;
+  for (const w of wheels) { w.k = M*G/(wheels.length*0.045); w.cd = 0.5*2*Math.sqrt(w.k*M/wheels.length); }
+  for (const h of hits)   { h.k = M*1500/hits.length*2.0; h.cd = 1.2*2*Math.sqrt(h.k*M/hits.length)*0.5; }
+  if (wheels.length) {
+    let zmax = 0; for (const w of wheels) zmax = Math.max(zmax, Math.abs(w.r[2]));
+    for (const w of wheels) if (Math.abs(Math.abs(w.r[2]) - zmax) < 0.2 && zmax > 0.15) w.steer = true;
+  }
+
+  // Tür
+  const rotorMotors = C.motors.map((m, i) => m.kind === 'rotor' ? i : -1).filter(i => i >= 0);
+  if (rotorMotors.length >= 3) {
+    C.type = 'multirotor';
+    C.rotorIdx = rotorMotors.sort((a, b) => Math.atan2(C.motors[a].r[2], C.motors[a].r[0]) - Math.atan2(C.motors[b].r[2], C.motors[b].r[0]));
+    C.rotorIdx.forEach((mi, k) => { C.motors[mi].spin = k % 2 ? 1 : -1; C.rotorTmax += C.motors[mi].Tmax;
+      C.Sz2 += C.motors[mi].r[2]**2; C.Sx2 += C.motors[mi].r[0]**2; });
+  } else if (C.motors.length || C.hasWing) C.type = 'plane';
+
+  // Dinamik/denge göstergeleri
+  let sumAS = 0, sumASf = 0, clmaxSum = 0, nW = 0;
+  for (const s of surfaces) if (Math.abs(s.n[1]) > 0.7) {
+    const w = s.a * s.S * (s.kind === 'tail' ? 0.9 : 1); sumAS += w; sumASf += w * (-s.r[2]);
+    if (s.kind === 'wing') { clmaxSum += s.a * STALL_AOA; nW++; }
+  }
+  if (sumAS > 0) { C.np = sumASf / sumAS; }
+  C.cbar = C.wingSpan > 0 ? C.wingArea / C.wingSpan : 0.3;
+  if (C.np !== null && C.hasWing) C.margin = (0 - C.np) / C.cbar;
+  if (C.wingArea > 0 && nW) C.stallSpeed = Math.sqrt(2*M*G / (RHO * C.wingArea * (clmaxSum/nW)));
+  const propT = C.motors.filter(m => m.kind === 'prop').reduce((a, m) => a + m.Tmax, 0);
+  C.tw = (C.type === 'multirotor' ? C.rotorTmax : propT + (C.type === 'plane' ? C.motors.filter(m => m.kind === 'rotor').reduce((a, m) => a + m.Tmax, 0) : 0)) / (M*G);
+  C.dih = 0.05 * C.wingArea * C.wingSpan;
+  return C;
+}
+
+function attitude(q) {
+  const f = qrot(q, [0,0,-1]), r = qrot(q, [1,0,0]), u = qrot(q, [0,1,0]);
+  return { pitch: Math.asin(clamp(f[1], -1, 1)), bank: Math.atan2(-r[1], u[1]), heading: Math.atan2(f[0], -f[2]), f, r, u };
+}
+
+function createBody(craft, x, z) {
+  const q = [0,0,0,1];
+  let minY = Infinity;
+  for (const c of craft.contacts) minY = Math.min(minY, qrot(q, c.r)[1] - c.radius);
+  if (!isFinite(minY)) minY = -0.5;
+  return { p:[x, -minY + 0.01, z], q, v:[0,0,0], w:[0,0,0], motor: craft.motors.map(() => 0), crashed:false, crashReason:'',
+    onGround:false, stalled:false, aoaWing:0, wash:0, airspeed:0, contactState: craft.contacts.map(() => false),
+    ctl:{ e:0, a:0, r:0 }, t:0 };
+}
+
+// Uçuş kontrolcüsü: kullanıcı komutlarından yüzey ve motor komutlarını üretir
+function computeControls(b, craft, inp, dt) {
+  const out = { e:0, a:0, r:0, cmd: craft.motors.map(() => 0) };
+  if (b.crashed) return out;
+  const thr = clamp(inp.throttle, 0, 1);
+  const att = attitude(b.q);
+  if (craft.type === 'multirotor') {
+    const up = att.u;
+    let fh = [att.f[0], 0, att.f[2]];
+    if (Math.hypot(fh[0], fh[2]) < 0.15) { const sg = att.f[1] > 0 ? -1 : 1; fh = [sg*up[0], 0, sg*up[2]]; }
+    fh = Math.hypot(fh[0], fh[2]) < 1e-4 ? [0,0,-1] : vnorm(fh);
+    const rh = [-fh[2], 0, fh[0]];
+    let wdes;
+    if (inp.acro) {
+      wdes = [inp.pitch*6.0, -inp.yaw*3.0, -inp.roll*6.0];
+    } else {
+      const maxTilt = 0.62, th = Math.tan(inp.pitch*maxTilt), ph = Math.tan(inp.roll*maxTilt);
+      const d = vnorm([-fh[0]*th + rh[0]*ph, 1, -fh[2]*th + rh[2]*ph]);
+      const db = qrotInv(b.q, d);
+      const err = [db[2], 0, -db[0]];
+      wdes = [clamp(6*err[0], -5, 5), -inp.yaw*2.5, clamp(6*err[2], -5, 5)];
+    }
+    const KR = 22;
+    const tau = [craft.I[0]*KR*(wdes[0]-b.w[0]), craft.I[1]*KR*(wdes[1]-b.w[1]), craft.I[2]*KR*(wdes[2]-b.w[2])];
+    let Tc;
+    if (inp.altHold) {
+      let st = (thr - 0.5)*2; const dz = 0.08;
+      st = Math.abs(st) < dz ? 0 : (st > 0 ? (st-dz)/(1-dz) : (st+dz)/(1-dz));
+      const vzd = st * (st > 0 ? 4 : 3);
+      Tc = craft.mass*(G + clamp(4.0*(vzd - b.v[1]), -8, 10)) / Math.max(0.5, up[1]);
+    } else Tc = thr * craft.rotorTmax;
+    Tc = clamp(Tc, 0, craft.rotorTmax*0.97);
+    const n = craft.rotorIdx.length;
+    for (const mi of craft.rotorIdx) {
+      const m = craft.motors[mi];
+      let T = Tc/n;
+      if (craft.Sz2 > 1e-6) T += -m.r[2]*tau[0]/craft.Sz2;
+      if (craft.Sx2 > 1e-6) T +=  m.r[0]*tau[2]/craft.Sx2;
+      T += m.spin*tau[1]/(K_YAWREACT*n);
+      out.cmd[mi] = clamp(T/m.Tmax, 0, 1);
+    }
+    craft.motors.forEach((m, i) => { if (m.kind === 'prop') out.cmd[i] = thr; });
+  } else {
+    let e = inp.pitch, a = inp.roll, r = inp.yaw;
+    if (inp.assist) {
+      a = a + (1 - Math.abs(a)) * (-1.5*att.bank) - 0.25*(-b.w[2]);
+      e = e - 0.20*b.w[0];
+      r = r + 0.35*inp.roll + 0.25*b.w[1];
+    }
+    out.e = clamp(e, -1, 1); out.a = clamp(a, -1, 1); out.r = clamp(r, -1, 1);
+    craft.motors.forEach((m, i) => { out.cmd[i] = thr; });
+  }
+  return out;
+}
+
+function stepBody(b, craft, inp, env, dt) {
+  if (craft.type === 'none') return;
+  const M = craft.mass, w = b.w;
+  const Vb = qrotInv(b.q, vsub(b.v, env.wind || [0,0,0]));
+  b.airspeed = vlen(Vb);
+  const ctl = computeControls(b, craft, inp, dt);
+  b.ctl = ctl;
+
+  let Fb = [0,0,0], Tb = [0,0,0];
+
+  // Prop akışı hızı
+  let washTh = 0, nProp = 0;
+  craft.motors.forEach((m, i) => { if (m.kind === 'prop') { washTh += b.motor[i]; nProp++; } });
+  b.wash = nProp ? 7*Math.sqrt(clamp(washTh/nProp, 0, 1)) : 0;
+
+  // Aerodinamik yüzeyler (kanat elemanı yöntemi)
+  let maxAoaWing = 0;
+  for (const s of craft.surfaces) {
+    let vl = vadd(Vb, vcross(w, s.r));
+    if (s.wash) vl = vadd(vl, vmul(s.washDir, b.wash));
+    const vn = vdot(vl, s.n), vc = vdot(vl, s.c);
+    const sg = vc >= 0 ? 1 : -1, vcp = Math.abs(vc);
+    const V2 = vn*vn + vcp*vcp;
+    if (V2 < 1e-3) continue;
+    const V = Math.sqrt(V2);
+    const delta = s.ail*ctl.a*K_AIL + s.elev*ctl.e*K_ELEV + s.rud*ctl.r*K_RUD;
+    const aoa = Math.atan2(-vn, vcp) + delta;
+    const aa = Math.abs(aoa);
+    const clLin = s.a*aoa, cdLin = s.cd0 + clLin*clLin/(Math.PI*0.8*s.AR) + 0.04*Math.abs(delta);
+    const clPost = Math.sin(2*aoa), cdPost = s.cd0 + 2*Math.sin(aoa)*Math.sin(aoa);
+    const sig = smooth01(aa, STALL_AOA, STALL_AOA + 0.15);
+    const CL = (1 - sig)*clLin + sig*clPost, CD = (1 - sig)*cdLin + sig*cdPost;
+    if (s.kind === 'wing' && Math.abs(s.n[1]) > 0.7) maxAoaWing = Math.max(maxAoaWing, aa);
+    const q = 0.5*RHO*V2*s.S;
+    const cc = vmul(s.c, sg);
+    const l = vmul(vadd(vmul(cc, -vn), vmul(s.n, vcp)), 1/V);
+    const d = vmul(vadd(vmul(cc, vcp), vmul(s.n, vn)), 1/V);
+    const F = vmul(vsub(vmul(l, CL), vmul(d, CD)), q);
+    Fb = vadd(Fb, F); Tb = vadd(Tb, vcross(s.r, F));
+  }
+  b.aoaWing = maxAoaWing;
+  b.stalled = maxAoaWing > STALL_AOA && b.airspeed > 3;
+
+  // Dihedral etkisi (yan kaymada kanat doğrulması)
+  const vf = -Vb[2];
+  if (craft.dih > 0 && vf > 1) {
+    const beta = Math.atan2(Vb[0], vf);
+    Tb[2] += craft.dih * beta * 0.5*RHO*vf*vf;
+  }
+
+  // Gövde sürüklemesi
+  const Vs = vlen(Vb);
+  for (let i = 0; i < 3; i++) Fb[i] -= 0.5*RHO*Vs*Vb[i]*craft.cda[i];
+
+  // Motorlar
+  craft.motors.forEach((m, i) => {
+    b.motor[i] += (ctl.cmd[i] - b.motor[i]) * (1 - Math.exp(-dt/m.tau));
+    let T = m.Tmax * b.motor[i];
+    if (m.kind === 'prop') {
+      // Pervane yüksek hızda daha erken verim kaybeder; jet/turbofan yüksek hızda da itiş üretir.
+      const speedRef = m.engineShape === 'jet' ? 185 : 42;
+      T *= clamp(1 - vdot(Vb, m.dir)/speedRef, m.engineShape === 'jet' ? 0.28 : 0, 1.2);
+    }
+    const F = vmul(m.dir, T);
+    Fb = vadd(Fb, F); Tb = vadd(Tb, vcross(m.r, F));
+    if (m.kind === 'rotor') Tb = vadd(Tb, vmul(m.dir, m.spin*K_YAWREACT*T));
+  });
+
+  let Fw = vadd(qrot(b.q, Fb), [0, -M*G, 0]);
+
+  // Zemin teması
+  let anyContact = false;
+  for (let i = 0; i < craft.contacts.length; i++) {
+    const c = craft.contacts[i];
+    const pw = vadd(b.p, qrot(b.q, c.r));
+    const depth = c.radius - pw[1];
+    if (depth <= 0) { b.contactState[i] = false; continue; }
+    const vw = vadd(b.v, qrot(b.q, vcross(w, c.r)));
+    let N = c.k*depth - c.cd*vw[1];
+    if (N < 0) N = 0;
+    anyContact = true;
+    if (!b.contactState[i]) {
+      b.contactState[i] = true;
+      if (!b.crashed) {
+        const hs = Math.hypot(vw[0], vw[2]);
+        if (c.kind === 'hit' && (-vw[1] > 3.2 || (hs > 12 && -vw[1] > 0.8))) { b.crashed = true; b.crashReason = 'Gövde yere çarptı'; }
+        else if (c.kind === 'wheel' && -vw[1] > 6.5) { b.crashed = true; b.crashReason = 'Çok sert iniş'; }
+      }
+    }
+    let Fh;
+    if (c.kind === 'wheel') {
+      let f = qrot(b.q, [0,0,-1]); f[1] = 0;
+      const fl = Math.hypot(f[0], f[2]);
+      f = fl < 0.2 ? [0,0,-1] : [f[0]/fl, 0, f[2]/fl];
+      if (c.steer && inp.steer) {
+        const th = -inp.steer*0.45, cs = Math.cos(th), sn = Math.sin(th);
+        f = [f[0]*cs + f[2]*sn, 0, -f[0]*sn + f[2]*cs];
+      }
+      const sd = [f[2], 0, -f[0]];
+      const vfw = vw[0]*f[0] + vw[2]*f[2], vsd = vw[0]*sd[0] + vw[2]*sd[2];
+      const onRunway = Math.abs(pw[0]) < 8 && Math.abs(pw[2]) < 180;
+      const mu = (onRunway ? 0.025 : 0.09) + (inp.brake ? 0.6 : 0);
+      const Ff = -mu*N*clamp(vfw/0.4, -1, 1), Fs = -1.1*N*clamp(vsd/0.4, -1, 1);
+      Fh = [f[0]*Ff + sd[0]*Fs, f[2]*Ff + sd[2]*Fs];
+    } else {
+      const hs = Math.hypot(vw[0], vw[2]);
+      const sc = hs > 1e-6 ? -0.7*N*clamp(hs/0.5, 0, 1)/hs : 0;
+      Fh = [vw[0]*sc, vw[2]*sc];
+    }
+    const Fc = [Fh[0], N, Fh[1]];
+    Fw = vadd(Fw, Fc);
+    Tb = vadd(Tb, vcross(c.r, qrotInv(b.q, Fc)));
+  }
+  b.onGround = anyContact;
+
+  // Entegrasyon (yarı-örtük Euler)
+  for (let i = 0; i < 3; i++) w[i] += Tb[i]/craft.I[i]*dt;
+  const damp = Math.exp(-0.12*dt);
+  w[0] *= damp; w[1] *= damp; w[2] *= damp;
+  b.v = vadd(b.v, vmul(Fw, dt/M));
+  b.p = vadd(b.p, vmul(b.v, dt));
+  const dq = qmul(b.q, [w[0]*0.5*dt, w[1]*0.5*dt, w[2]*0.5*dt, 0]);
+  b.q = qnorm([b.q[0]+dq[0], b.q[1]+dq[1], b.q[2]+dq[2], b.q[3]+dq[3]]);
+
+  // Yerde durma: titreşimi önle
+  if (b.onGround && vlen(b.v) < 0.04 && vlen(w) < 0.05 && inp.throttle < 0.02) { b.v = [0, Math.min(0, b.v[1]), 0]; b.w = [0,0,0]; }
+  b.t += dt;
+}
+// ==== PHYSICS CORE END ====
+
+// =====================================================================
+//  GÖRÜNTÜ / ARAYÜZ
+// =====================================================================
+const $ = id => document.getElementById(id);
+const container = $('canvas-container');
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0xcfe0f0, 1800, 8200);
+
+const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 14000);
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05; renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+container.appendChild(renderer.domElement);
+const canvasEl = renderer.domElement;
+
+// Atmosfer kubbesi: ufukta açık, tepede derin mavi
+let skyDome;
+{
+  const geo = new THREE.SphereGeometry(9000, 96, 64), cols = [], pos = geo.attributes.position;
+  const top = new THREE.Color(0x397fc2), hor = new THREE.Color(0xd9eaf5), tmp = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) {
+    const h = clamp(pos.getY(i)/9000, 0, 1);
+    tmp.copy(hor).lerp(top, Math.pow(h, 0.48));
+    if (h < 0.12) tmp.lerp(new THREE.Color(0xf4dfc5), (0.12-h)*0.22);
+    cols.push(tmp.r, tmp.g, tmp.b);
+  }
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  skyDome = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors:true, side:THREE.BackSide, fog:false, depthWrite:false }));
+  scene.add(skyDome);
+}
+{
+  const pm = new THREE.PMREMGenerator(renderer), es = new THREE.Scene(), sk = scene.children.find(o => o.geometry && o.geometry.type === 'SphereGeometry');
+  es.add(sk.clone()); const bright = new THREE.Mesh(new THREE.SphereGeometry(300, 16, 12), new THREE.MeshBasicMaterial({ color:0xfff1cf })); bright.position.set(900, 1100, 600); bright.scale.setScalar(4); es.add(bright);
+  const gr = new THREE.Mesh(new THREE.CircleGeometry(9000, 32), new THREE.MeshBasicMaterial({ color:0x5f7f4c })); gr.rotation.x = -Math.PI/2; gr.position.y = -2; es.add(gr);
+  scene.environment = pm.fromScene(es, 0.03).texture; scene.environmentIntensity = 0.8;
+}
+scene.add(new THREE.HemisphereLight(0xdbeaff, 0x6b8f55, 0.45));
+// Güneş parıltısı
+{ const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'), gd = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gd.addColorStop(0, 'rgba(255,250,225,1)'); gd.addColorStop(.15, 'rgba(255,240,190,.8)'); gd.addColorStop(1, 'rgba(255,230,160,0)'); x.fillStyle = gd; x.fillRect(0, 0, 128, 128);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map:new THREE.CanvasTexture(c), fog:false, depthWrite:false, blending:THREE.AdditiveBlending })); sp.position.set(1100, 1000, -1500).setLength(2300); sp.scale.setScalar(500); scene.add(sp);
+  // Katmanlı kümülüs bulutları: yumuşak tepeler, ince taban ve gölgeli alt yüzey
+  function makeCloudTexture() {
+    const c = document.createElement('canvas'); c.width = 512; c.height = 256;
+    const g = c.getContext('2d');
+    const base = g.createRadialGradient(256,138,10,256,138,235);
+    base.addColorStop(0,'rgba(255,255,255,.40)');
+    base.addColorStop(.6,'rgba(255,255,255,.20)');
+    base.addColorStop(1,'rgba(255,255,255,0)');
+    g.fillStyle=base; g.fillRect(0,0,512,256);
+    for (let i=0; i<38; i++) {
+      const x=35+Math.random()*442, y=48+Math.random()*130, r=20+Math.random()*52;
+      const puff=g.createRadialGradient(x-r*.2,y-r*.3,2,x,y,r);
+      puff.addColorStop(0,'rgba(255,255,255,.95)');
+      puff.addColorStop(.42,'rgba(250,253,255,.70)');
+      puff.addColorStop(.8,'rgba(220,235,247,.27)');
+      puff.addColorStop(1,'rgba(220,235,247,0)');
+      g.fillStyle=puff; g.beginPath(); g.arc(x,y,r,0,Math.PI*2); g.fill();
+    }
+    const shade=g.createLinearGradient(0,145,0,256);
+    shade.addColorStop(0,'rgba(100,130,160,0)');
+    shade.addColorStop(1,'rgba(100,130,160,.18)');
+    g.fillStyle=shade; g.fillRect(0,145,512,111);
+    return new THREE.CanvasTexture(c);
+  }
+  const cloudTex=makeCloudTexture(), cloudLayers=[];
+  for (let layer=0; layer<3; layer++) {
+    const count=layer===0?54:36;
+    for (let i=0; i<count; i++) {
+      const a=Math.random()*Math.PI*2, r=650+Math.random()*6100;
+      const cl=new THREE.Sprite(new THREE.SpriteMaterial({
+        map:cloudTex, transparent:true, depthWrite:false, fog:false,
+        opacity:layer===0?.72:.43
+      }));
+      cl.position.set(Math.cos(a)*r,260+layer*145+Math.random()*90,Math.sin(a)*r);
+      const scale=(layer===0?520:680)+Math.random()*620;
+      cl.scale.set(scale,scale*(.34+Math.random()*.15),1);
+      scene.add(cl); cloudLayers.push(cl);
+    }
+  }
+  // Uzay yıldız alanı ve uzak gök cisimleri
+  const starPositions=[];
+  for (let i=0;i<1800;i++) {
+    const u=Math.random()*2-1, a=Math.random()*Math.PI*2, r=8400+Math.random()*350;
+    const q=Math.sqrt(1-u*u);
+    starPositions.push(Math.cos(a)*q*r,u*r,Math.sin(a)*q*r);
+  }
+  const starGeo=new THREE.BufferGeometry();
+  starGeo.setAttribute('position',new THREE.Float32BufferAttribute(starPositions,3));
+  const starMat=new THREE.PointsMaterial({color:0xffffff,size:13,sizeAttenuation:false,transparent:true,opacity:0,depthWrite:false});
+  const stars=new THREE.Points(starGeo,starMat); stars.frustumCulled=false; scene.add(stars);
+  const planet=new THREE.Mesh(new THREE.SphereGeometry(720,48,32),new THREE.MeshStandardMaterial({color:0x245a9a,roughness:1,emissive:0x071b36,emissiveIntensity:.25}));
+  planet.visible=false; scene.add(planet);
+  const moon=new THREE.Mesh(new THREE.SphereGeometry(185,32,24),new THREE.MeshStandardMaterial({color:0xb9c2d0,roughness:1}));
+  moon.visible=false; scene.add(moon);
+  window.__skySpace={stars,starMat,planet,moon,cloudLayers};
+  // Uzak dağlar
+  const mg = new THREE.ConeGeometry(1, 1, 7, 1), mm = new THREE.MeshStandardMaterial({ color:0x6f86a3, roughness:1, flatShading:false, fog:true });
+  for (let i = 0; i < 40; i++) { const a = i/40*6.283 + Math.random()*.1, r = 6200 + Math.random()*900, h = 150 + Math.random()*320, m = new THREE.Mesh(mg, mm); m.scale.set(h*1.8, h, h*1.8); m.position.set(Math.cos(a)*r, h/2 - 2, Math.sin(a)*r); scene.add(m); }
+}
+const sun = new THREE.DirectionalLight(0xfff2dc, 2.6);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left:-22, right:22, top:22, bottom:-22, near:1, far:220 });
+sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.02; sun.shadow.radius = 3;
+scene.add(sun, sun.target);
+
+function canvasTex(w, h, draw, rep) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c);
+  if (rep) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep[0], rep[1]); }
+  t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const grassTex = canvasTex(256, 256, (g, w, h) => {
+  g.fillStyle = '#6ba353'; g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 2500; i++) { const l = 40 + Math.random()*22; g.fillStyle = `hsl(100,${35 + Math.random()*20}%,${l}%)`;
+    g.fillRect(Math.random()*w, Math.random()*h, 2 + Math.random()*3, 2 + Math.random()*3); }
+}, [1200, 1200]);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(12000, 12000), new THREE.MeshStandardMaterial({ map:grassTex, roughness:1 }));
+ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; scene.add(ground);
+
+const runwayTex = canvasTex(128, 1024, (g, w, h) => {
+  g.fillStyle = '#3b424c'; g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 1800; i++) { const v = 50 + Math.random()*25; g.fillStyle = `rgb(${v},${v+3},${v+8})`; g.fillRect(Math.random()*w, Math.random()*h, 2, 2); }
+  g.fillStyle = '#e8e8e8'; g.fillRect(6, 0, 3, h); g.fillRect(w-9, 0, 3, h);
+  for (let y = 0; y < h; y += 64) g.fillRect(w/2 - 2, y + 8, 4, 32);
+});
+const runway = new THREE.Mesh(new THREE.PlaneGeometry(16, 360), new THREE.MeshStandardMaterial({ map:runwayTex, roughness:.85, polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2 }));
+runway.rotation.x = -Math.PI/2; runway.position.y = 0.01; runway.receiveShadow = true; scene.add(runway);
+
+// Havalimanı tesisleri ve uzaktaki küçük şehir: geniş haritaya ilk yerleşim katmanı.
+{
+  const hangarMat = new THREE.MeshStandardMaterial({ color:0xb9c4cf, roughness:.82 });
+  const roofMat = new THREE.MeshStandardMaterial({ color:0x465565, roughness:.72 });
+  for (let i=0;i<3;i++) {
+    const x = 34 + i*18, z = -38;
+    const h = new THREE.Mesh(new THREE.BoxGeometry(14,7,22), hangarMat); h.position.set(x,3.5,z); h.castShadow=true; h.receiveShadow=true; scene.add(h);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(14.5,.65,22.5), roofMat); roof.position.set(x,7.2,z); scene.add(roof);
+    const door = new THREE.Mesh(new THREE.BoxGeometry(8,5,.18), new THREE.MeshStandardMaterial({color:0x526f89,metalness:.25,roughness:.55})); door.position.set(x,2.5,z-11.1); scene.add(door);
+  }
+  const count=150, geo=new THREE.BoxGeometry(1,1,1), mats=[0x9aa9b5,0xb7b1a4,0x8799a7,0xc4c9c8,0x777f8d].map(color=>new THREE.MeshStandardMaterial({color,roughness:.9}));
+  const blocks=mats.map(m=>new THREE.InstancedMesh(geo,m,count));
+  const dummy=new THREE.Object3D(); let used=0;
+  for(let i=0;i<count;i++) {
+    const x=520+(Math.random()-.5)*1150, z=-1050+(Math.random()-.5)*1150;
+    const w=22+Math.random()*38, d=22+Math.random()*42, h=14+Math.random()*95;
+    const b=blocks[i%mats.length]; dummy.position.set(x,h/2,z); dummy.scale.set(w,h,d); dummy.rotation.y=(Math.random()-.5)*.16; dummy.updateMatrix(); b.setMatrixAt(Math.floor(i/mats.length),dummy.matrix); used++;
+  }
+  blocks.forEach((b,i)=>{b.count=Math.ceil(count/mats.length); b.castShadow=false; b.receiveShadow=true; scene.add(b);});
+  // Pistten görülebilen yakın şehir: farklı yükseklikte apartmanlar ve ofis blokları.
+  const facadeCanvas=document.createElement('canvas'); facadeCanvas.width=128; facadeCanvas.height=128;
+  const fc=facadeCanvas.getContext('2d'); fc.fillStyle='#596b7b'; fc.fillRect(0,0,128,128);
+  for(let yy=8;yy<124;yy+=18) for(let xx=8;xx<124;xx+=18) {
+    fc.fillStyle=(Math.random()>.18)?(Math.random()>.5?'#b9d8e8':'#e4c98e'):'#344656';
+    fc.fillRect(xx,yy,9,11);
+  }
+  const facadeTex=new THREE.CanvasTexture(facadeCanvas); facadeTex.colorSpace=THREE.SRGBColorSpace;
+  const cityMats=[0x9eabb5,0xb8b3a8,0x8799a7,0xc5c9c5,0x788796].map(color=>new THREE.MeshStandardMaterial({color, map:facadeTex, roughness:.88}));
+  const cityCount=96, cityGeo=new THREE.BoxGeometry(1,1,1);
+  const cityMeshes=cityMats.map(m=>new THREE.InstancedMesh(cityGeo,m,cityCount));
+  const cityObj=new THREE.Object3D();
+  const districts=[[-260,-360],[260,-420],[-320,310],[340,330]];
+  for(let i=0;i<cityCount;i++) {
+    const district=districts[i%districts.length];
+    const x=district[0]+(Math.random()-.5)*190, z=district[1]+(Math.random()-.5)*190;
+    const w=17+Math.random()*24, d=17+Math.random()*24, h=22+Math.random()*105;
+    const mesh=cityMeshes[i%cityMeshes.length];
+    cityObj.position.set(x,h/2,z); cityObj.scale.set(w,h,d); cityObj.rotation.y=(Math.random()-.5)*.18; cityObj.updateMatrix();
+    mesh.setMatrixAt(Math.floor(i/cityMeshes.length),cityObj.matrix);
+  }
+  cityMeshes.forEach(m=>{m.count=Math.ceil(cityCount/cityMats.length);m.castShadow=false;m.receiveShadow=true;scene.add(m);});
+  // Şehir mahallelerini bağlayan ana yollar.
+  const nearRoadMat=new THREE.MeshStandardMaterial({color:0x424a53,roughness:1});
+  for(const [x,z,w,d] of [[0,-360,760,13],[0,310,760,13],[-300,-20,13,760],[320,-20,13,760]]) {
+    const road=new THREE.Mesh(new THREE.BoxGeometry(w,.14,d),nearRoadMat); road.position.set(x,.05,z); scene.add(road);
+  }
+  // Havaalanı terminali ve kontrol kulesi.
+  const terminal=new THREE.Mesh(new THREE.BoxGeometry(46,9,18),new THREE.MeshStandardMaterial({color:0xcbd5dc,roughness:.75}));
+  terminal.position.set(-48,4.5,-24); terminal.castShadow=true; terminal.receiveShadow=true; scene.add(terminal);
+  const glassBand=new THREE.Mesh(new THREE.BoxGeometry(46,2.2,.16),new THREE.MeshStandardMaterial({color:0x5c9db8,metalness:.2,roughness:.25}));
+  glassBand.position.set(-48,5.3,-14.9); scene.add(glassBand);
+  const tower=new THREE.Group();
+  const towerStem=new THREE.Mesh(new THREE.BoxGeometry(5,19,5),new THREE.MeshStandardMaterial({color:0xbfc9d1,roughness:.7})); towerStem.position.y=9.5; tower.add(towerStem);
+  const towerCab=new THREE.Mesh(new THREE.BoxGeometry(9,4,9),new THREE.MeshStandardMaterial({color:0x477b91,metalness:.15,roughness:.3})); towerCab.position.y=21; tower.add(towerCab);
+  tower.position.set(-78,0,-40); scene.add(tower);
+  // Şehir çevresinde birkaç ana yol çizgisi
+  const roadMat=new THREE.MeshStandardMaterial({color:0x454c54,roughness:1});
+  for(const [x,z,w,d] of [[520,-1050,1250,18],[520,-1050,18,1250],[900,-1050,14,1250],[520,-1450,1250,14]]) {
+    const road=new THREE.Mesh(new THREE.BoxGeometry(w,.12,d),roadMat); road.position.set(x,.04,z); scene.add(road);
+  }
+}
+
+// Ağaçlar (hız hissi için)
+{
+  const n = 650, trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.25, 0.35, 3, 10), new THREE.MeshStandardMaterial({ color:0x6b4a2b }), n);
+  const crown = new THREE.InstancedMesh(new THREE.ConeGeometry(2.2, 7, 14), new THREE.MeshStandardMaterial({ color:0x2f6b3a, roughness:1 }), n);
+  const m = new THREE.Matrix4(), mc = new THREE.Matrix4();
+  for (let i = 0; i < n; i++) {
+    let x, z; do { x = (Math.random()-.5)*9000; z = (Math.random()-.5)*9000; } while (Math.abs(x) < 45 && Math.abs(z) < 260);
+    const s = 0.7 + Math.random()*0.9;
+    m.compose(new THREE.Vector3(x, 1.5*s, z), new THREE.Quaternion(), new THREE.Vector3(s, s, s)); trunk.setMatrixAt(i, m);
+    mc.compose(new THREE.Vector3(x, 3*s + 3.5*s, z), new THREE.Quaternion(), new THREE.Vector3(s, s, s)); crown.setMatrixAt(i, mc);
+  }
+  trunk.castShadow = crown.castShadow = false; scene.add(trunk, crown);
+}
+// Rüzgâr gülü
+const sockGroup = new THREE.Group(); sockGroup.position.set(16, 0, 105);
+{
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 5, 8), new THREE.MeshStandardMaterial({ color:0xdddddd }));
+  pole.position.y = 2.5; sockGroup.add(pole);
+  const head = new THREE.Group(); head.position.y = 5; sockGroup.add(head);
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.6, 12, 1, true), new THREE.MeshStandardMaterial({ color:0xff6a00, side:THREE.DoubleSide }));
+  cone.geometry.translate(0, 0.8, 0); head.add(cone);
+  sockGroup.userData = { head, cone }; scene.add(sockGroup);
+}
+
+// ---------------------------------------------------------------------
+const craftGroup = new THREE.Group(), craftModel = new THREE.Group();
+craftGroup.add(craftModel); scene.add(craftGroup);
+const comMarker = new THREE.Mesh(new THREE.SphereGeometry(0.06, 14, 10), new THREE.MeshBasicMaterial({ color:0xff2d2d, depthTest:false }));
+const npMarker = new THREE.Mesh(new THREE.SphereGeometry(0.06, 14, 10), new THREE.MeshBasicMaterial({ color:0x2d6bff, depthTest:false }));
+comMarker.renderOrder = npMarker.renderOrder = 999;
+craftModel.add(comMarker, npMarker);
+
+const state = {
+  mode:'build', parts:[], selectedId:null, craft:analyzeCraft([]), body:null,
+  camYaw:0.7, camPitch:0.28, camDist:9, chaseDist:9, chaseYawOff:0, chasePitchOff:0, pilotZoom:1, camMode:'pilot',
+  rc:{ throttle:0, yaw:0, roll:0, pitch:0 },
+  kb:{}, step:0.1, brake:false,
+  opts:{ snap:true, assist:true, invertPitch:false, acro:false, altHold:true, wind:0, sound:true }
+};
+const PILOT_POS = new THREE.Vector3(-12, 1.7, 135);
+const WIND_LEVELS = [0, 3, 6, 10], WIND_NAMES = ['Yok', 'Hafif', 'Orta', 'Güçlü'];
+const START_Z = 140;
+
+let idCounter = 1;
+const newId = () => 'p' + (idCounter++);
+const toastEl = $('toast'); let toastT = 0;
+function toast(msg) { toastEl.textContent = msg; toastEl.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove('show'), 1900); }
+
+// ---------------------------------------------------------------------
+//  Parça mesh'leri
+// ---------------------------------------------------------------------
+function mat(color, o) { return new THREE.MeshStandardMaterial(Object.assign({ color, roughness:.5, metalness:.1 }, o || {})); }
+
+const V2 = (x, y) => new THREE.Vector2(x, y);
+// u: 0=burun ... 1=kuyruk, yarıçap profili
+const PROF = {
+  fus:  u => 1, fus_old: u => { const e = .07; return u < e ? Math.sqrt(Math.max(0, 1 - ((e-u)/e)**2))*.5 + .5 : u > 1-e ? Math.sqrt(Math.max(0, 1 - ((u-1+e)/e)**2))*.5 + .5 : 1; },
+  slim: u => 1, slim_old: u => { const e = .06; return u < e ? Math.sqrt(Math.max(0, 1 - ((e-u)/e)**2))*.5 + .5 : u > 1-e ? Math.sqrt(Math.max(0, 1 - ((u-1+e)/e)**2))*.5 + .5 : 1; },
+  tailcone: u => 1 - .82*Math.pow(u, 1.5),
+  nose: u => Math.pow(Math.sin(u*Math.PI/2), .8),
+  tank: u => 1, tank_old: u => { const e = .05; return u < e ? Math.sqrt(Math.max(0, 1 - ((e-u)/e)**2))*.5 + .5 : u > 1-e ? Math.sqrt(Math.max(0, 1 - ((u-1+e)/e)**2))*.5 + .5 : 1; },
+  pod:  u => Math.pow(Math.max(0, Math.sin(Math.PI*(.04 + .92*u))), .55) * (1 - .25*u),
+  canopy:u => Math.pow(Math.max(0, Math.sin(Math.PI*u)), .7) * (u < .3 ? 1 : 1 - .3*(u-.3)),
+  pill: u => Math.pow(Math.max(0, Math.sin(Math.PI*(.02+.96*u))), .25),
+  ball: u => Math.sqrt(Math.max(0, 1 - (2*u-1)**2))
+};
+function lathe(shape, d, mat, seg) {
+  const f = PROF[shape], pts = [], N = 28;
+  for (let i = 0; i <= N; i++) { const u = 1 - i/N; pts.push(V2(Math.max(0.002, f(u)), 0.5 - u)); }
+  const a = pts[0], z = pts[pts.length-1], all = [];
+  if (a.x > .05) all.push(V2(.001, a.y), V2(a.x, a.y));        // arka kapak (sert kenar için çift nokta)
+  all.push(...pts);
+  if (z.x > .05) all.push(V2(z.x, z.y), V2(.001, z.y));         // ön kapak
+  const g = new THREE.LatheGeometry(all, seg || 40); g.rotateX(-Math.PI/2); g.scale(d[0]/2, d[1]/2, d[2]);
+  return g;
+}
+const AF = x => 5*(0.2969*Math.sqrt(x) - 0.126*x - 0.3516*x*x + 0.2843*x**3 - 0.1015*x**4);
+function wingGeo(d, taper, sw, half) {
+  const NS = 18, NA = 12, R = NA*2, pos = [], idx = [], [span, th, chord] = d;
+  for (let i = 0; i <= NS; i++) {
+    const t = i/NS, s = half ? t : (t*2 - 1), a = half ? t : Math.abs(s);
+    const x = half ? (t - .5)*span : s*span/2;
+    let c = chord*(1 - (1-taper)*a) * (0.2 + 0.8*Math.sqrt(Math.max(0, 1 - Math.pow(a, 6))));
+    const z0 = -chord/2 + sw*chord*a*(half ? 1 : 1) * (half ? 1 : 1) * (half ? 1 : 1);
+    const zc = z0 + (chord*(1 - (1-taper)*a) - c)*0.5;
+    for (let k = 0; k < R; k++) {
+      const up = k < NA, j = up ? k : R - k, xx = (1 - Math.cos(Math.PI*j/NA))/2;
+      pos.push(x, (up ? 1 : -1)*AF(xx)*th*(c/chord), zc + xx*c);
+    }
+  }
+  for (let i = 0; i < NS; i++) for (let k = 0; k < R; k++) { const a = i*R + k, b = i*R + (k+1)%R, c2 = a + R, e = b + R; idx.push(a, c2, b, b, c2, e); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals(); return g;
+}
+const paint = (c, o) => new THREE.MeshPhysicalMaterial(Object.assign({ color:c, roughness:.32, metalness:.15, clearcoat:.8, clearcoatRoughness:.18 }, o || {}));
+const metal = (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color:c, roughness:.28, metalness:.85 }, o || {}));
+const discMat = () => new THREE.MeshBasicMaterial({ color:0x111827, transparent:true, opacity:0, side:THREE.DoubleSide, depthWrite:false });
+function bladeGeo(len, w, n) {
+  const sh = new THREE.Shape(); sh.moveTo(0, -w*.3); sh.bezierCurveTo(len*.3, -w*.55, len*.8, -w*.5, len, -w*.12); sh.lineTo(len, w*.12); sh.bezierCurveTo(len*.7, w*.4, len*.25, w*.5, 0, w*.3);
+  return new THREE.ShapeGeometry(sh, 8);
+}
+let _ft = null, _gt = null;
+function flameTex() { if (_ft) return _ft; const c = document.createElement('canvas'); c.width = 4; c.height = 64; const x = c.getContext('2d'), g = x.createLinearGradient(0, 0, 0, 64);
+  g.addColorStop(0, '#000'); g.addColorStop(.45, '#3a3a3a'); g.addColorStop(.85, '#e8e8e8'); g.addColorStop(1, '#fff'); x.fillStyle = g; x.fillRect(0, 0, 4, 64); return _ft = new THREE.CanvasTexture(c); }
+function glowTex() { if (_gt) return _gt; const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'), g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(.25, 'rgba(255,200,120,.7)'); g.addColorStop(1, 'rgba(255,120,30,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); return _gt = new THREE.CanvasTexture(c); }
+// R: lüle yarıçapı, L: alev boyu. +Z yönüne (egzoz) uzanır.
+function makeFlame(R, L, jet) {
+  const root = new THREE.Group(), tex = flameTex(), layers = [];
+  const spec = jet ? [[1.05,1,0xff7a1f,.45],[.72,.78,0xffc36b,.7],[.4,.55,0xaedcff,.95]] : [[1.1,1,0xff5a12,.42],[.78,.82,0xffa63a,.7],[.42,.58,0xfff3c8,.95]];
+  for (const [rs, ls, col, op] of spec) {
+    const gm = new THREE.ConeGeometry(R*rs, L*ls, 24, 1, true); gm.translate(0, L*ls/2, 0); gm.rotateX(Math.PI/2);
+    const m = new THREE.MeshBasicMaterial({ color:col, alphaMap:tex, transparent:true, opacity:op, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide, fog:false });
+    root.add(new THREE.Mesh(gm, m)); layers.push({ m, op });
+  }
+  for (let i = 0; i < 4; i++) {          // şok elmasları
+    const m = new THREE.MeshBasicMaterial({ color:jet ? 0xdff0ff : 0xfff0c0, transparent:true, opacity:.5, blending:THREE.AdditiveBlending, depthWrite:false, fog:false });
+    const dm = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), m); const k = 1 - i*.18; dm.scale.set(R*.5*k, R*.5*k, R*.7); dm.position.z = R*(1.6 + i*1.7); root.add(dm); layers.push({ m, op:.5 });
+  }
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map:glowTex(), transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, fog:false })); sp.scale.setScalar(R*7); sp.position.z = R*.6; root.add(sp);
+  const light = new THREE.PointLight(0xff9a45, 0, 10, 2); light.position.z = R*3; root.add(light);
+  root.visible = false; return { root, layers, light, glow:sp, ph:Math.random()*6 };
+}
+function makePartMesh(p) {
+  const def = PART_DEFS[p.type], s = p.scale || 1, d = partDims(p);
+  const g = new THREE.Group();
+  const add = (geo, m, x, y, z, parent) => { const me = new THREE.Mesh(geo, m); me.position.set(x||0, y||0, z||0); me.castShadow = true; me.receiveShadow = true; (parent || g).add(me); return me; };
+  switch (def.k) {
+    case 'fus': {
+      const gl = def.sh === 'canopy';
+      add(lathe(def.sh, d), gl ? new THREE.MeshPhysicalMaterial({ color:def.color, roughness:.04, metalness:.2, transparent:true, opacity:.65, clearcoat:1 }) : paint(def.color));
+      if (def.sh === 'tank') { for (const z of [-.3, .05, .3]) add(new THREE.TorusGeometry(d[0]/2*1.003, .006, 8, 40), metal(0x1e293b), 0, 0, z*d[2]); }
+      if (def.sh === 'ball') add(new THREE.SphereGeometry(d[0]*.2, 12, 10), metal(0x38bdf8, { roughness:.05 }), 0, -d[1]*.1, -d[2]*.42);
+      break; }
+    case 'wing': case 'tail': {
+      const m = paint(def.color, { side:THREE.DoubleSide });
+      add(wingGeo(d, def.taper, def.sw, false), m);
+      add(new THREE.SphereGeometry(.012, 8, 6), new THREE.MeshBasicMaterial({ color:0xff3355 }), -d[0]/2*.99, 0, 0); add(new THREE.SphereGeometry(.012, 8, 6), new THREE.MeshBasicMaterial({ color:0x22dd66 }), d[0]/2*.99, 0, 0);
+      break; }
+    case 'fin': { const gm = wingGeo([d[1], d[0], d[2]], def.taper, def.sw, true); gm.rotateZ(Math.PI/2); add(gm, paint(def.color, { side:THREE.DoubleSide })); break; }
+    case 'frame': {
+      const sh = new THREE.Shape(), R = d[0]/2; for (let i = 0; i < 8; i++) { const a = i*Math.PI/4 + Math.PI/8, x = Math.cos(a)*R, y = Math.sin(a)*R; i ? sh.lineTo(x, y) : sh.moveTo(x, y); }
+      const gm = new THREE.ExtrudeGeometry(sh, { depth:d[1]*.6, bevelEnabled:true, bevelSize:.02, bevelThickness:.02, bevelSegments:4, curveSegments:8 }); gm.rotateX(-Math.PI/2); gm.translate(0, -d[1]*.3, 0); add(gm, paint(def.color, { roughness:.4 }));
+      add(new THREE.SphereGeometry(d[0]*.22, 18, 12, 0, Math.PI*2, 0, Math.PI/2), paint(0x3b82f6, { roughness:.15 }), 0, d[1]*.34, 0);
+      add(new THREE.SphereGeometry(.018, 8, 6), new THREE.MeshStandardMaterial({ color:0x22dd66, emissive:0x22dd66, emissiveIntensity:1.5 }), 0, d[1]*.2, -d[2]/2); add(new THREE.SphereGeometry(.018, 8, 6), new THREE.MeshStandardMaterial({ color:0xff3333, emissive:0xff3333, emissiveIntensity:1.5 }), 0, d[1]*.2, d[2]/2);
+      g.children.forEach(c => c.material.userData.led = c.material.emissiveIntensity > 1);
+      break; }
+    case 'arm': { const m = metal(0x4b5563, { roughness:.35 }); add(new THREE.CylinderGeometry(d[2]*.5, d[2]*.5, d[0], 14), m).rotation.z = Math.PI/2; add(new THREE.CylinderGeometry(d[2]*.62, d[2]*.62, d[0]*.14, 14), m, 0, 0, 0).rotation.z = Math.PI/2; break; }
+    case 'prop': {
+      const sh = def.sh, prop = new THREE.Group();
+      if (sh === 'prop') {
+        add(new THREE.CylinderGeometry(0.09*s, 0.11*s, d[2], 20), metal(def.color)).rotation.x = Math.PI/2;
+        add(new THREE.SphereGeometry(.09*s, 16, 12, 0, Math.PI*2, 0, Math.PI/2), metal(0xdc2626, { roughness:.2 })).rotation.x = -Math.PI/2;
+        g.children[1].position.z = -d[2]/2;
+        prop.position.z = -d[2]/2 - .03; g.add(prop);
+        for (let i = 0; i < 2; i++) { const b = add(bladeGeo(d[0]/2, .07*s), new THREE.MeshStandardMaterial({ color:0x111827, roughness:.4, side:THREE.DoubleSide }), 0, 0, 0, prop); b.rotation.z = i*Math.PI; b.rotation.x = .25; }
+        const disc = new THREE.Mesh(new THREE.CircleGeometry(d[0]/2, 32), discMat()); disc.position.z = prop.position.z; g.add(disc);
+        g.userData.spin = { obj:prop, axis:'z', disc, dir:-1 };
+      } else {
+        const n = sh === 'jet' ? 'jet' : 'bell';
+        const pr = sh === 'jet' ? [[.55,.0],[.5,.2],[.5,.7],[.58,.88],[.62,1]] : [[.3,0],[.5,.15],[.45,.4],[.35,.55],[.8,.85],[1,1]];
+        const pts = pr.map(([r, u]) => V2(r*d[0]/2, (.5 - u)*d[2])).reverse();
+        const gm = new THREE.LatheGeometry(pts, 28); gm.rotateX(-Math.PI/2); add(gm, metal(def.color, { roughness:.3 })).material.side = THREE.DoubleSide;
+        if (sh === 'jet') { const fan = new THREE.Group(); fan.position.z = -d[2]/2 + .03; g.add(fan);
+          for (let i = 0; i < 12; i++) { const b = add(new THREE.BoxGeometry(.012, d[0]*.42, .03), metal(0xd1d5db), 0, 0, 0, fan); b.rotation.z = i*Math.PI/6; b.position.set(Math.cos(i*Math.PI/6)*d[0]*.2, Math.sin(i*Math.PI/6)*d[0]*.2, 0); b.rotation.z = i*Math.PI/6 - Math.PI/2; }
+          const disc = new THREE.Mesh(new THREE.CircleGeometry(d[0]/2, 24), discMat()); disc.position.z = fan.position.z; g.add(disc);
+          g.userData.spin = { obj:fan, axis:'z', disc, dir:-1 };
+        } else { const disc = new THREE.Mesh(new THREE.PlaneGeometry(.01, .01), discMat()); g.add(disc); g.userData.spin = { obj:new THREE.Object3D(), axis:'z', disc, dir:0 }; }
+      }
+      if (sh !== 'prop') { const jet = sh === 'jet', fl = makeFlame(jet ? .62*d[0]/2 : d[0]/2*.92, jet ? d[2]*2.4 : d[2]*3.4, jet); fl.root.position.z = d[2]/2; g.add(fl.root); g.userData.flame = fl; }
+      break; }
+    case 'rotor': {
+      add(new THREE.CylinderGeometry(0.06*s, 0.075*s, d[1], 20), metal(def.color));
+      const prop = new THREE.Group(); prop.position.y = d[1]/2 + 0.014; g.add(prop);
+      for (let i = 0; i < 2; i++) { const b = add(bladeGeo(d[0]/2, .06*s), new THREE.MeshStandardMaterial({ color:0x0f172a, roughness:.4, side:THREE.DoubleSide }), 0, 0, 0, prop); b.rotation.x = -Math.PI/2; b.rotation.z = 0; b.rotation.y = i*Math.PI; }
+      add(new THREE.SphereGeometry(.03*s, 12, 8), metal(0xe11d48), 0, d[1]/2 + .02, 0);
+      const disc = new THREE.Mesh(new THREE.CircleGeometry(d[0]/2, 32), discMat()); disc.rotation.x = -Math.PI/2; disc.position.y = prop.position.y; g.add(disc);
+      g.userData.spin = { obj:prop, axis:'y', disc, dir:1 };
+      break; }
+    case 'gear': {
+      add(new THREE.CylinderGeometry(0.018, 0.024, d[1], 12), metal(0x9ca3af), 0, -d[1]/2, 0);
+      const w = new THREE.Group(); w.position.y = -d[1]; g.add(w);
+      add(new THREE.TorusGeometry(WHEEL_R*s*.78, WHEEL_R*s*.28, 12, 24), new THREE.MeshStandardMaterial({ color:0x111827, roughness:.9 }), 0, 0, 0, w).rotation.y = Math.PI/2;
+      add(new THREE.CylinderGeometry(WHEEL_R*s*.6, WHEEL_R*s*.6, .045, 20), metal(0xd1d5db), 0, 0, 0, w).rotation.z = Math.PI/2;
+      break; }
+  }
+  g.userData.partId = p.id;
+  g.position.set(p.pos[0], p.pos[1], p.pos[2]);
+  g.quaternion.set(p.q[0], p.q[1], p.q[2], p.q[3]);
+  return g;
+}
+function disposeObj(o) { o.traverse(c => { if (c.geometry) c.geometry.dispose(); if (c.material) c.material.dispose(); }); }
+
+function applyHighlight() {
+  for (const g of craftModel.children) {
+    if (!g.userData || !g.userData.partId) continue;
+    const sel = state.mode === 'build' && g.userData.partId === state.selectedId;
+    g.traverse(o => { if (o.material && o.material.emissive && !o.material.userData.keepEmit) {
+      if (o.material.emissiveIntensity === undefined) return;
+      if (sel) { o.material.emissive.setHex(0x2a5cff); o.material.emissiveIntensity = 0.6; }
+      else if (!o.material.userData.led) { o.material.emissive.setHex(0x000000); o.material.emissiveIntensity = 1; } } });
+  }
+}
+
+function refresh() {
+  for (let i = craftModel.children.length - 1; i >= 0; i--) {
+    const c = craftModel.children[i]; if (c === comMarker || c === npMarker) continue;
+    craftModel.remove(c); disposeObj(c);
+  }
+  for (const p of state.parts) { const mesh = makePartMesh(p); mesh.visible = true; craftModel.add(mesh); }
+  craftModel.visible = true; craftGroup.visible = true;
+  state.craft = analyzeCraft(state.parts);
+  const C = state.craft;
+  comMarker.position.set(C.com[0], C.com[1], C.com[2]);
+  npMarker.position.set(C.com[0], C.com[1], C.np !== null ? C.com[2] - C.np : C.com[2]);
+  npMarker.visible = C.np !== null;
+  if (state.mode === 'build') placeBuildCraft();
+  applyHighlight(); updateInfo(); updateSelTitle();
+}
+
+function placeBuildCraft() {
+  craftModel.position.set(0, 0, 0);
+  craftGroup.position.set(0, 0, 0); craftGroup.quaternion.set(0, 0, 0, 1);
+  let minY = Infinity;
+  for (const c of state.craft.contacts) minY = Math.min(minY, c.r[1] + state.craft.com[1] - c.radius);
+  craftGroup.position.y = isFinite(minY) ? -minY : 0.5;
+}
+
+// ---------------------------------------------------------------------
+//  Parça ekleme / düzenleme
+// ---------------------------------------------------------------------
+function fuseExtent() {
+  let zmin = Infinity, zmax = -Infinity;
+  for (const p of state.parts) if (PART_DEFS[p.type].k === 'fus' && p.type !== 'nose' && p.type !== 'tailcone' && p.type !== 'cockpit' && p.type !== 'battery' && p.type !== 'camera') { const h = PART_DEFS[p.type].dims[2]*(p.scale||1)/2; zmin = Math.min(zmin, p.pos[2]-h); zmax = Math.max(zmax, p.pos[2]+h); }
+  return isFinite(zmin) ? [zmin, zmax] : null;
+}
+const undoStack = [];
+function pushUndo() { undoStack.push(JSON.stringify(state.parts)); if (undoStack.length > 60) undoStack.shift(); }
+function undo() { const j = undoStack.pop(); if (!j) return toast('Geri alınacak işlem yok'); state.parts = JSON.parse(j); if (!state.parts.some(q => q.id === state.selectedId)) state.selectedId = null; refresh(); }
+function mkPart(type, pos, q, scale) { return { id:newId(), type, pos:pos.slice(), q:(q || [0,0,0,1]).slice(), scale:scale || 1 }; }
+
+function addPart(type) { pushUndo();
+  const ext = fuseExtent(); // gövde zinciri
+  let pos = [0, 0.5, 0];
+  switch (type) {
+    case 'fuselage': case 'fuselage_long': pos = [0, 0, ext ? ext[1] + PART_DEFS[type].dims[2]/2 : 0]; break;
+    case 'wing': case 'wing_large': case 'wing_short': case 'wing_sst': pos = [0, 0.22, ext ? (ext[0] + ext[1])/2 - 0.1 : 0]; break;
+    case 'tail': case 'tail_large': pos = [0, 0.1, ext ? ext[1] + 0.05 : 1.4]; break;
+    case 'fin': case 'fin_twin': pos = [0, 0.35, ext ? ext[1] + 0.05 : 1.4]; break;
+    case 'prop_motor': case 'prop_large': pos = [0, 0, ext ? ext[0] - 0.15 : -0.5]; break;
+    case 'gear': case 'landing_wide': pos = [0.4, -0.12, ext ? (ext[0] + ext[1])/2 - 0.1 : 0]; break;
+    case 'rotor': pos = [0.35, 0.09, 0.35]; break;
+    case 'frame': pos = [0, 0, 0]; break;
+    case 'slim': pos = [0, 0, ext ? ext[1] + 0.8 : 0]; break;
+    case 'tailcone': pos = [0, 0, ext ? ext[1] + 0.35 : 1.0]; break;
+    case 'nose': pos = [0, 0, ext ? ext[0] - 0.25 : -0.9]; break;
+    case 'rect': case 'swept': case 'delta': pos = [0, 0.2, ext ? (ext[0] + ext[1])/2 : 0]; break;
+    case 'canard': pos = [0, 0.1, ext ? ext[0] + 0.3 : -0.4]; break;
+    case 'fin_big': pos = [0, 0.5, ext ? ext[1] : 1.4]; break;
+    case 'jet': case 'rocket': case 'turbofan': case 'ion_engine': case 'booster': pos = [0, 0, ext ? ext[1] + 0.5 : 1.0]; break;
+    case 'cockpit': pos = [0, 0.22, ext ? ext[0] + 0.5 : -0.3]; break;
+    case 'rotor_big': case 'rotor_xl': pos = [0.5, 0.09, 0.5]; break;
+    case 'arm': case 'drone_arm_long': pos = [0, 0.03, 0]; break;
+  }
+  if (pos[0] === 0 && pos[1] === 0.5 && pos[2] === 0) {
+    const d = PART_DEFS[type], zMid = ext ? (ext[0] + ext[1]) / 2 : 0;
+    if (d.k === 'fus') pos = [0, 0, ext ? ext[1] + d.dims[2] / 2 : 0];
+    else if (d.k === 'wing') pos = [0, 0.22, zMid];
+    else if (d.k === 'tail') pos = [0, 0.12, ext ? ext[1] + 0.25 : 1.35];
+    else if (d.k === 'fin') pos = [0, 0.35, ext ? ext[1] + 0.2 : 1.4];
+    else if (d.k === 'prop') pos = [0, 0, ext ? ext[0] - 0.35 : -0.7];
+    else if (d.k === 'rotor') pos = [0.5, 0.12, 0.5];
+    else if (d.k === 'arm') pos = [0, 0.03, 0];
+    else if (d.k === 'gear') pos = [0.5, -0.12, zMid];
+    else if (d.k === 'frame') pos = [0, 0, 0];
+  }
+  const p = mkPart(type, pos);
+  state.parts.push(p); matchDiameter(p); state.selectedId = p.id; refresh();
+  toast(PART_DEFS[type].label + ' eklendi – ok tuşlarıyla yerleştir');
+}
+const selPart = () => state.parts.find(p => p.id === state.selectedId);
+
+function movePart(axis, sign) { pushUndo();
+  const p = selPart(); if (!p) return toast('Önce bir parça seç');
+  p.pos[axis] = Math.round((p.pos[axis] + sign*state.step)*1000)/1000; refresh();
+}
+function rotatePart(ax) { pushUndo();
+  const p = selPart(); if (!p) return toast('Önce bir parça seç');
+  const a = ax === 'x' ? [1,0,0] : ax === 'y' ? [0,1,0] : [0,0,1];
+  p.q = qnorm(qmul(qaxis(a, Math.PI/2), p.q)); refresh();
+}
+function sizePart(f) { pushUndo();
+  const p = selPart(); if (!p) return toast('Önce bir parça seç');
+  p.scale = clamp(Math.round((p.scale || 1)*f*100)/100, 0.4, 2.5); if (p.w) p.w *= f; refresh(); toast('Boyut ×' + p.scale.toFixed(2));
+}
+function mirrorPart() { pushUndo();
+  const p = selPart(); if (!p) return toast('Önce bir parça seç');
+  if (Math.abs(p.pos[0]) < 0.02) return toast('Parça ortada (x≈0); önce yana kaydır');
+  const c = mkPart(p.type, [-p.pos[0], p.pos[1], p.pos[2]], [p.q[0], -p.q[1], -p.q[2], p.q[3]], p.scale);
+  state.parts.push(c); state.selectedId = c.id; refresh(); toast('Karşı tarafa kopyalandı');
+}
+function dupPart() { pushUndo();
+  const p = selPart(); if (!p) return toast('Önce bir parça seç');
+  const c = mkPart(p.type, [p.pos[0], p.pos[1] + 0.1, p.pos[2]], p.q, p.scale);
+  state.parts.push(c); state.selectedId = c.id; refresh();
+}
+function deletePart() { pushUndo();
+  if (!state.selectedId) return toast('Silinecek parça seçili değil');
+  const i = state.parts.findIndex(p => p.id === state.selectedId);
+  state.parts.splice(i, 1);
+  state.selectedId = state.parts.length ? state.parts[Math.min(i, state.parts.length - 1)].id : null;
+  refresh();
+}
+
+function loadPreset(name) { pushUndo();
+  state.parts = []; state.selectedId = null;
+  craftGroup.visible = true; craftModel.visible = true;
+  state.camDist = 9; state.camYaw = 0.7; state.camPitch = 0.28;
+  const P = (t, pos, q, sc) => state.parts.push(mkPart(t, pos, q, sc));
+  if (name === 'plane') {
+    P('fuselage', [0, 0, -0.7]); P('fuselage', [0, 0, 0.7]); P('tailcone', [0, 0, 1.75]);
+    P('wing', [0, 0.22, -0.35]); P('tail', [0, 0.08, 1.85]); P('fin', [0, 0.3, 1.85]);
+    P('prop_motor', [0, 0, -1.55]);
+    P('gear', [0.4, -0.12, -0.35]); P('gear', [-0.4, -0.12, -0.35]); P('gear', [0, -0.12, -1.0]);
+  } else if (name === 'quad') {
+    P('frame', [0, 0, 0]);
+    P('arm', [0, 0.04, 0], qaxis([0,1,0], Math.PI/4)); P('arm', [0, 0.04, 0], qaxis([0,1,0], -Math.PI/4));
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) P('rotor', [sx*0.354, 0.1, sz*0.354]);
+  }
+  refresh();
+}
+function saveDesign() { try { localStorage.setItem('rcsim.design.v2', JSON.stringify(state.parts)); toast('Tasarım kaydedildi'); } catch (e) { toast('Kaydedilemedi (tarayıcı izin vermiyor)'); } }
+function loadDesign() {
+  try { const s = localStorage.getItem('rcsim.design.v2'); if (!s) return toast('Kayıtlı tasarım yok');
+    const arr = JSON.parse(s); if (!Array.isArray(arr)) throw 0;
+    state.parts = arr.filter(p => PART_DEFS[p.type]).map(p => ({ id:newId(), type:p.type, pos:p.pos, q:p.q, scale:p.scale || 1 }));
+    state.selectedId = null; refresh(); toast('Tasarım yüklendi');
+  } catch (e) { toast('Yüklenemedi'); }
+}
+
+// ---------------------------------------------------------------------
+//  Bilgi paneli
+// ---------------------------------------------------------------------
+const infoEl = $('info');
+function updateSelTitle() { const p = selPart(); $('sel-title').textContent = 'Seçili parça: ' + (p ? PART_DEFS[p.type].label + (p.scale !== 1 ? ' ×' + p.scale : '') : '—'); }
+function updateInfo() {
+  const C = state.craft;
+  if (C.type === 'none') { infoEl.innerHTML = 'Parça ekleyerek başla veya hazır model seç.'; return; }
+  const L = [];
+  const tn = { plane:'Uçak', multirotor:'Multirotor (drone)' }[C.type];
+  L.push(`<b>${tn}</b> · ${C.mass.toFixed(2)} kg · ${state.parts.length} parça`);
+  L.push(`İtki/Ağırlık: <b class="${C.tw < (C.type === 'plane' ? 0.35 : 1.3) ? 'bad' : 'good'}">${C.tw.toFixed(2)}</b>`);
+  if (C.type === 'plane') {
+    if (C.margin !== null) {
+      const m = C.margin*100, cls = m < 0 ? 'bad' : (m < 3 || m > 30) ? 'warn' : 'good';
+      const txt = m < 0 ? 'Kararsız – CG\'yi öne al' : m < 3 ? 'Çok hassas' : m > 30 ? 'Burun ağır' : 'İyi';
+      L.push(`Statik marj: <b class="${cls}">%${m.toFixed(0)} – ${txt}</b>`);
+    } else L.push('<b class="bad">Kanat yok!</b>');
+    if (C.stallSpeed) L.push(`Stall hızı ≈ ${C.stallSpeed.toFixed(1)} m/s`);
+    if (!C.surfaces.some(s => s.kind === 'tail' || s.elev)) L.push('<b class="warn">Pitch kontrolü yok (yatay kuyruk ekle)</b>');
+    if (C.nWheels === 0) L.push('<b class="warn">İniş takımı yok → karından kalkış</b>');
+  } else {
+    const off = Math.hypot(C.com[0] - C.motors.filter(m => m.kind === 'rotor').reduce((a, m) => a + m.r[0], 0)/C.rotorIdx.length - 0, 0);
+    let cx = 0, cz = 0; for (const mi of C.rotorIdx) { cx += C.motors[mi].r[0]; cz += C.motors[mi].r[2]; }
+    cx /= C.rotorIdx.length; cz /= C.rotorIdx.length;
+    const d = Math.hypot(cx, cz);
+    L.push(`Rotor: ${C.rotorIdx.length} · CG sapması: <b class="${d > 0.06 ? 'warn' : 'good'}">${(d*100).toFixed(0)} cm</b>`);
+    if (C.rotorIdx.length % 2) L.push('<b class="warn">Çift sayıda rotor önerilir (yaw dengesi)</b>');
+  }
+  infoEl.innerHTML = L.join('<br>');
+}
+
+// ---------------------------------------------------------------------
+//  Mod geçişi
+// ---------------------------------------------------------------------
+let stickL, stickR;
+function applyStickModeForCraft() {
+  const multi = state.craft.type === 'multirotor';
+  const spring = multi && state.opts.altHold;
+  stickL.cfg.springY = spring;
+  const y = spring ? 0 : -1;
+  stickL.setKnob(0, y); state.rc.throttle = (y + 1)/2; state.rc.yaw = 0;
+  $('btn-acro').classList.toggle('hidden', !multi);
+  $('btn-althold').classList.toggle('hidden', !multi);
+  $('btn-assist').classList.toggle('hidden', multi);
+}
+function startFlight() {
+  state.body = createBody(state.craft, 0, START_Z);
+  state.chaseYawOff = state.chasePitchOff = 0; chaseFwd.set(0, 0, -1);
+  hideOverlay(); applyStickModeForCraft();
+  state.camMode === 'fpv' && 0;
+}
+function setMode(mode) {
+  if (mode === 'fly' && state.craft.type === 'none') { toast('Önce uçak veya drone oluştur'); return; }
+  state.mode = mode;
+  document.body.classList.toggle('flight-mode', mode === 'fly');
+  $('btn-build').classList.toggle('on', mode === 'build'); $('btn-fly').classList.toggle('on', mode === 'fly');
+  $('build-dock').classList.toggle('hidden', mode !== 'build'); $('parts-panel').classList.toggle('hidden', mode !== 'build');
+  $('info').classList.toggle('hidden', mode !== 'build');
+  $('flybar').classList.toggle('hidden', mode !== 'fly');
+  $('hud').classList.toggle('hidden', mode !== 'fly');
+  $('telemetry').classList.toggle('hidden', mode !== 'fly');
+  comMarker.visible = npMarker.visible = (mode === 'build');
+  if (mode === 'fly') {
+    npMarker.visible = false;
+    startFlight(); syncCraft(0);
+  } else {
+    craftModel.children.forEach(g => { const f = g.userData && g.userData.flame; if (f) { f.root.visible = false; f.light.intensity = 0; } });
+    state.body = null; hideOverlay(); $('stall').classList.add('hidden'); placeBuildCraft();
+    npMarker.visible = state.craft.np !== null;
+    camera.fov = 60; camera.updateProjectionMatrix();
+  }
+  applyHighlight(); initAudio();
+}
+function showOverlay(html) { const o = $('overlay'); o.innerHTML = html; o.classList.remove('hidden'); }
+function hideOverlay() { $('overlay').classList.add('hidden'); }
+
+// ---------------------------------------------------------------------
+//  Sanal kumanda çubukları (çoklu dokunma, iPad)
+// ---------------------------------------------------------------------
+function makeStick(el, knob, cfg, onChange) {
+  let id = null, nx = 0, ny = 0;
+  const maxR = () => Math.max(10, el.clientWidth/2 - knob.clientWidth/2);
+  function setKnob(x, y) { nx = x; ny = y; const r = maxR(); knob.style.transform = `translate(${x*r}px, ${-y*r}px)`; }
+  function fromPointer(e) {
+    const rc = el.getBoundingClientRect();
+    const dx = (e.clientX - (rc.left + rc.width/2))/maxR(), dy = -(e.clientY - (rc.top + rc.height/2))/maxR();
+    setKnob(clamp(dx, -1, 1), clamp(dy, -1, 1)); onChange(nx, ny);
+  }
+  el.addEventListener('pointerdown', e => { if (id !== null) return; id = e.pointerId; try { el.setPointerCapture(id); } catch (_) {} fromPointer(e); e.preventDefault(); });
+  el.addEventListener('pointermove', e => { if (e.pointerId === id) { fromPointer(e); e.preventDefault(); } });
+  const end = e => { if (e.pointerId !== id) return; id = null; setKnob(0, cfg.springY ? 0 : ny); onChange(nx, ny); };
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end); el.addEventListener('lostpointercapture', end);
+  return { cfg, setKnob: (x, y) => setKnob(x, y), get x() { return nx; }, get y() { return ny; } };
+}
+stickL = makeStick($('stick-left'), $('knob-left'), { springY:false }, (x, y) => { state.rc.yaw = x; state.rc.throttle = (y + 1)/2; });
+stickR = makeStick($('stick-right'), $('knob-right'), { springY:true }, (x, y) => { state.rc.roll = x; state.rc.pitch = y; });
+requestAnimationFrame(() => stickL.setKnob(0, -1));
+
+// ---------------------------------------------------------------------
+//  Giriş birleştirme: dokunmatik + klavye + gamepad
+// ---------------------------------------------------------------------
+const gp = { throttleRate:0, lx:0, ly:0, rx:0, ry:0, brake:false, prevBtn:[] };
+function pollGamepad(dt) {
+  const pads = (navigator.getGamepads && navigator.getGamepads()) || []; let pad = null;
+  for (const p of pads) if (p && p.connected && p.axes.length >= 4) { pad = p; break; }
+  if (!pad) { gp.lx = gp.ly = gp.rx = gp.ry = 0; gp.active = false; gp.brake = false; return; }
+  const dz = v => Math.abs(v) < 0.08 ? 0 : v;
+  gp.active = true; gp.lx = dz(pad.axes[0]); gp.ly = dz(pad.axes[1]); gp.rx = dz(pad.axes[2]); gp.ry = dz(pad.axes[3]);
+  gp.brake = !!(pad.buttons[0] && pad.buttons[0].pressed);
+  const edge = i => { const now = !!(pad.buttons[i] && pad.buttons[i].pressed), was = !!gp.prevBtn[i]; gp.prevBtn[i] = now; return now && !was; };
+  if (edge(9) && state.mode === 'fly') resetFlight();
+  if (edge(1) && state.mode === 'fly') cycleCamera();
+  if (state.mode === 'fly') {
+    if (state.craft.type === 'multirotor' && state.opts.altHold) { const y = -gp.ly; state.rc.throttle = clamp(0.5 + y*0.5, 0, 1); stickL.setKnob(gp.lx, y); }
+    else if (gp.ly) { state.rc.throttle = clamp(state.rc.throttle - gp.ly*dt*0.6, 0, 1); stickL.setKnob(gp.lx, state.rc.throttle*2 - 1); }
+  }
+}
+const expo = v => 0.65*v + 0.35*v*v*v;
+function buildInput(dt) {
+  const k = state.kb;
+  if (k['w']) { state.rc.throttle = clamp(state.rc.throttle + dt*0.5, 0, 1); stickL.setKnob(stickL.x, state.rc.throttle*2 - 1); }
+  if (k['s']) { state.rc.throttle = clamp(state.rc.throttle - dt*0.5, 0, 1); stickL.setKnob(stickL.x, state.rc.throttle*2 - 1); }
+  const yawK = (k['d'] ? 1 : 0) - (k['a'] ? 1 : 0);
+  const rollK = (k['arrowright'] ? 1 : 0) - (k['arrowleft'] ? 1 : 0);
+  const upK = (k['arrowup'] ? 1 : 0) - (k['arrowdown'] ? 1 : 0);
+  const yaw = clamp(state.rc.yaw + yawK + (gp.active ? gp.lx : 0), -1, 1);
+  const roll = clamp(state.rc.roll + rollK + (gp.active ? gp.rx : 0), -1, 1);
+  const stickUp = clamp(state.rc.pitch + upK + (gp.active ? -gp.ry : 0), -1, 1);
+  const pitchCmd = state.opts.invertPitch ? stickUp : -stickUp;   // varsayılan: geri çek = burun yukarı
+  const yawE = expo(yaw);
+  return { throttle: state.rc.throttle, pitch: expo(pitchCmd), roll: expo(roll), yaw: yawE, steer: yawE,
+    assist: state.opts.assist, acro: state.opts.acro, altHold: state.opts.altHold, brake: state.brake || k[' '] || gp.brake };
+}
+addEventListener('keydown', e => {
+  const key = e.key.toLowerCase(); state.kb[key] = true;
+  if (key === 'r' && state.mode === 'fly') resetFlight();
+  if (key === 'c' && state.mode === 'fly') cycleCamera();
+  if ((key === 'delete' || key === 'backspace') && state.mode === 'build') deletePart();
+  if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(key)) e.preventDefault();
+  initAudio();
+});
+addEventListener('keyup', e => { state.kb[e.key.toLowerCase()] = false; });
+addEventListener('blur', () => { state.kb = {}; });
+
+// ---------------------------------------------------------------------
+//  Kamera
+// ---------------------------------------------------------------------
+const pointers = new Map(); let pinchBase = 0, pinchStart = 1;
+canvasEl.addEventListener('pointerdown', e => {
+  try { canvasEl.setPointerCapture(e.pointerId); } catch (_) {}
+  pointers.set(e.pointerId, { x:e.clientX, y:e.clientY, sx:e.clientX, sy:e.clientY, moved:false });
+  if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinchBase = Math.hypot(a.x - b.x, a.y - b.y); pinchStart = zoomValue(); }
+  initAudio();
+  if (state.mode === 'build' && pointers.size === 1) startDrag(e); else finishDrag();
+});
+canvasEl.addEventListener('pointermove', e => {
+  const p = pointers.get(e.pointerId); if (!p) return;
+  const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
+  if (Math.hypot(e.clientX - p.sx, e.clientY - p.sy) > 6) p.moved = true;
+  if (drag && drag.pid === e.pointerId) { if (p.moved) doDrag(e); return; }
+  if (pointers.size === 1) {
+    if (state.mode === 'build') { state.camYaw -= dx*0.006; state.camPitch = clamp(state.camPitch + dy*0.006, 0.02, 1.45); }
+    else if (state.camMode === 'chase') { state.chaseYawOff -= dx*0.006; state.chasePitchOff = clamp(state.chasePitchOff + dy*0.004, -0.4, 0.9); }
+  } else if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (pinchBase > 10) setZoom(pinchStart * pinchBase / Math.max(10, d));
+  }
+});
+const endPtr = e => {
+  const p = pointers.get(e.pointerId); pointers.delete(e.pointerId);
+  if (drag && drag.pid === e.pointerId) finishDrag();
+  if (p && !p.moved && pointers.size === 0 && e.type === 'pointerup' && state.mode === 'build') pickPart(e.clientX, e.clientY);
+};
+canvasEl.addEventListener('pointerup', endPtr); canvasEl.addEventListener('pointercancel', endPtr);
+canvasEl.addEventListener('wheel', e => { e.preventDefault(); setZoom(zoomValue()*(e.deltaY > 0 ? 1.1 : 0.9)); }, { passive:false });
+function zoomValue() { return state.mode === 'build' ? state.camDist : state.camMode === 'chase' ? state.chaseDist : 1/state.pilotZoom; }
+function setZoom(v) {
+  if (state.mode === 'build') state.camDist = clamp(v, 1.5, 30);
+  else if (state.camMode === 'chase') state.chaseDist = clamp(v, 3, 40);
+  else if (state.camMode === 'pilot') state.pilotZoom = clamp(1/v, 0.4, 3);
+}
+['gesturestart', 'gesturechange', 'gestureend'].forEach(t => document.addEventListener(t, e => e.preventDefault()));
+document.addEventListener('dblclick', e => e.preventDefault());
+document.addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('touchmove', e => {
+  const t = e.target;
+  if (t && t.closest && t.closest('.dock, #parts-panel, #topbar, #flybar, #hud, button')) return;
+  e.preventDefault();
+}, { passive:false });
+
+const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2();
+let drag = null; const dragPt = new THREE.Vector3(), dragV = new THREE.Vector3();
+const partHalf = p => rotDims(p.q, partDims(p)).map(v => v/2);
+// Gövde merkezi: iniş takımında bacak aşağı uzandığı için kutu merkezi kaydırılır
+const partCtr = p => { if (PART_DEFS[p.type].k !== 'gear') return p.pos; const o = qrot(p.q, [0, -PART_DEFS.gear.dims[1]*(p.scale || 1)/2, 0]); return vadd(p.pos, o); };
+function snapPos(p, pos) {
+  if (!state.opts.snap) return pos.slice();
+  const hd = partHalf(p), cOff = vsub(partCtr(p), p.pos), c = vadd(pos, cOff), TH = 0.16, out = pos.slice(), best = [TH, TH, TH];
+  for (const o of state.parts) {
+    if (o === p) continue;
+    const ho = partHalf(o), co = partCtr(o);
+    if (![0,1,2].every(i => Math.abs(c[i] - co[i]) <= ho[i] + hd[i] + TH)) continue;   // yalnız yakındaki parçalara yapış
+    const bodies = PART_DEFS[o.type].k === 'fus' && PART_DEFS[p.type].k === 'fus', emb = bodies ? 0 : 0.02;
+    for (let i = 0; i < 3; i++) {
+      for (const t of [co[i], co[i] + ho[i] + hd[i] - emb, co[i] - ho[i] - hd[i] + emb]) {
+        const dd = Math.abs(c[i] - t); if (dd < best[i]) { best[i] = dd; out[i] = t - cOff[i]; }
+      }
+    }
+  }
+  return out;
+}
+function startDrag(e) {
+  ndc.set(e.clientX/innerWidth*2 - 1, -(e.clientY/innerHeight)*2 + 1); raycaster.setFromCamera(ndc, camera);
+  const hit = raycaster.intersectObjects(craftModel.children.filter(c => c.userData.partId), true)[0];
+  drag = null; if (!hit) return;
+  let o = hit.object; while (o && !(o.userData && o.userData.partId)) o = o.parent; if (!o) return;
+  const part = state.parts.find(q => q.id === o.userData.partId); if (!part) return;
+  state.selectedId = part.id; applyHighlight(); updateSelTitle();
+  craftModel.updateWorldMatrix(true, false);
+  const loc = craftModel.worldToLocal(hit.point.clone());
+  drag = { id:part.id, pid:e.pointerId, g:o, off:[loc.x - part.pos[0], loc.y - part.pos[1], loc.z - part.pos[2]], changed:false,
+    plane:new THREE.Plane().setFromNormalAndCoplanarPoint(camera.getWorldDirection(dragV).negate().clone(), hit.point) };
+}
+function doDrag(e) {
+  const part = state.parts.find(q => q.id === drag.id); if (!part) return;
+  if (!drag.changed) pushUndo();
+  ndc.set(e.clientX/innerWidth*2 - 1, -(e.clientY/innerHeight)*2 + 1); raycaster.setFromCamera(ndc, camera);
+  if (!raycaster.ray.intersectPlane(drag.plane, dragPt)) return;
+  craftModel.worldToLocal(dragPt);
+  const raw = [dragPt.x - drag.off[0], dragPt.y - drag.off[1], dragPt.z - drag.off[2]];
+  part.pos = snapPos(part, raw).map(v => Math.round(v*1000)/1000);
+  drag.g.position.set(part.pos[0], part.pos[1], part.pos[2]); drag.changed = true;
+}
+function matchDiameter(p) {
+  if (!ROUND.has(p.type)) return false;
+  const hp = partHalf(p);
+  for (const o of state.parts) {
+    if (o === p || !ROUND.has(o.type)) continue;
+    const ho = partHalf(o);
+    if (Math.abs(p.pos[0] - o.pos[0]) < .05 && Math.abs(p.pos[1] - o.pos[1]) < .05 && Math.abs(Math.abs(p.pos[2] - o.pos[2]) - (hp[2] + ho[2])) < .03) {
+      const w = partDims(o)[0]; if (Math.abs(partDims(p)[0] - w) > 1e-4) { p.w = w; return true; } return false; }
+  }
+  return false;
+}
+function finishDrag() { if (drag && drag.changed) { const part = state.parts.find(q => q.id === drag.id); if (part) { matchDiameter(part); part.pos[0] = Math.round(part.pos[0]*1000)/1000; } refresh(); } drag = null; }
+function pickPart(x, y) {
+  ndc.set(x/innerWidth*2 - 1, -(y/innerHeight)*2 + 1);
+  raycaster.setFromCamera(ndc, camera);
+  const hits = raycaster.intersectObjects(craftModel.children.filter(c => c.userData.partId), true);
+  let id = null;
+  if (hits.length) { let o = hits[0].object; while (o && !(o.userData && o.userData.partId)) o = o.parent; if (o) id = o.userData.partId; }
+  state.selectedId = id; applyHighlight(); updateSelTitle();
+}
+
+const chaseFwd = new THREE.Vector3(0, 0, -1), camPos = new THREE.Vector3(), camTarget = new THREE.Vector3(), tmpV = new THREE.Vector3(), tmpQ = new THREE.Quaternion();
+const tiltQ = new THREE.Quaternion();
+function cycleCamera() {
+  state.camMode = state.camMode === 'pilot' ? 'chase' : state.camMode === 'chase' ? 'fpv' : 'pilot';
+  $('btn-cam').textContent = '📷 ' + { pilot:'Pilot', chase:'Takip', fpv:'FPV' }[state.camMode];
+  chaseFwd.set(0, 0, -1);
+}
+function setFov(f) { if (Math.abs(camera.fov - f) > 0.05) { camera.fov = f; camera.updateProjectionMatrix(); } }
+function updateCamera(dt) {
+  if (state.mode === 'build') {
+    const t = tmpV.copy(craftGroup.position).add(new THREE.Vector3(0, 0.3, 0));
+    const cp = Math.cos(state.camPitch);
+    camera.position.set(t.x + state.camDist*cp*Math.sin(state.camYaw), t.y + state.camDist*Math.sin(state.camPitch), t.z + state.camDist*cp*Math.cos(state.camYaw));
+    camera.lookAt(t); setFov(60); return;
+  }
+  const b = state.body; if (!b) return;
+  const P = craftGroup.position;
+  if (state.camMode === 'chase') {
+    setFov(62);
+    const f = qrot(b.q, [0, 0, -1]); tmpV.set(f[0], f[1]*0.5, f[2]).normalize();
+    chaseFwd.lerp(tmpV, 1 - Math.exp(-2.5*dt)).normalize();
+    const dir = chaseFwd.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), state.chaseYawOff);
+    camPos.copy(P).addScaledVector(dir, -state.chaseDist); camPos.y += state.chaseDist*(0.22 + state.chasePitchOff) + 0.6;
+    camPos.y = Math.max(0.5, camPos.y);
+    camera.position.lerp(camPos, 1 - Math.exp(-8*dt));
+    camTarget.copy(P).addScaledVector(dir, 2.5); camera.lookAt(camTarget);
+  } else if (state.camMode === 'fpv') {
+    setFov(state.craft.type === 'multirotor' ? 105 : 85);
+    const n = state.craft.nose, c = state.craft.com;
+    const off = qrot(b.q, [0, 0.06, n[2] - 0.12]);
+    camera.position.set(b.p[0] + off[0], b.p[1] + off[1], b.p[2] + off[2]);
+    tiltQ.setFromAxisAngle(tmpV.set(1, 0, 0), state.craft.type === 'multirotor' && !state.opts.acro ? 0.35 : 0.05);
+    tmpQ.set(b.q[0], b.q[1], b.q[2], b.q[3]).multiply(tiltQ);
+    camera.quaternion.copy(tmpQ);
+  } else {
+    camera.position.copy(PILOT_POS);
+    camera.lookAt(P.x, P.y + 0.3, P.z);
+    const dist = Math.max(4, camera.position.distanceTo(P));
+    const fov = clamp(2*Math.atan(7/dist)*180/Math.PI/state.pilotZoom, 8, 62);
+    camera.fov += (fov - camera.fov)*(1 - Math.exp(-6*dt)); camera.updateProjectionMatrix();
+  }
+}
+
+// ---------------------------------------------------------------------
+//  Uçuş yardımcıları
+// ---------------------------------------------------------------------
+const envState = { wind:[0, 0, 0] };
+function windAt(t) {
+  const sp = WIND_LEVELS[state.opts.wind]; if (!sp) return [0, 0, 0];
+  const g = 1 + 0.25*Math.sin(t*0.9) + 0.15*Math.sin(t*2.3 + 1.0);
+  const d = vnorm([-0.6, 0, 0.8]);
+  return [d[0]*sp*g, 0.12*sp*Math.sin(t*1.7), d[2]*sp*g];
+}
+function syncCraft(dt) {
+  const b = state.body, C = state.craft; if (!b) return;
+  craftModel.position.set(-C.com[0], -C.com[1], -C.com[2]);
+  craftGroup.position.set(b.p[0], b.p[1], b.p[2]);
+  craftGroup.quaternion.set(b.q[0], b.q[1], b.q[2], b.q[3]);
+  for (const g of craftModel.children) {
+    const mi = C.motorIndexByPart[g.userData.partId]; const th = mi !== undefined ? b.motor[mi] : 0;
+    const fl = g.userData && g.userData.flame;
+    if (fl) {
+      const t = performance.now()/1000, on = th > 0.03 && !b.crashed; fl.root.visible = on;
+      if (on) { const f = 1 + .07*Math.sin(t*55 + fl.ph) + .05*Math.sin(t*131 + fl.ph*2) + (Math.random()-.5)*.06, a = Math.min(1, th*1.5);
+        fl.root.scale.set(.92 + .08*Math.random(), .92 + .08*Math.random(), (.18 + .82*th)*f);
+        for (const l of fl.layers) l.m.opacity = l.op*a; fl.glow.material.opacity = a*.9; fl.light.intensity = th*5*f; }
+      else fl.light.intensity = 0;
+    }
+    const sp = g.userData && g.userData.spin; if (!sp) continue;
+    sp.obj.rotation[sp.axis] += sp.dir*th*70*dt;
+    sp.disc.material.opacity = Math.min(0.32, th*0.45);
+  }
+}
+function resetFlight() {
+  startFlight(); syncCraft(0);
+}
+
+// Minimal uçuş telemetrisi (görüş merkezinin dışında)
+const teleEl = $('telemetry'); let teleT = 0;
+function updateHud(dt) {
+  const b = state.body, C = state.craft; if (!b) return;
+  const att = attitude(b.q);
+  teleT += dt; if (teleT < 0.1) return; teleT = 0;
+  const gs = Math.hypot(b.v[0], b.v[2]);
+  const hdg = (att.heading*180/Math.PI + 360) % 360;
+  const thr = b.motor.length ? Math.round(Math.max(...b.motor)*100) : 0;
+  teleEl.textContent =
+    `İrtifa  ${Math.max(0, b.p[1] - 0.1).toFixed(1).padStart(6)} m   Dikey ${b.v[1] >= 0 ? '+' : ''}${b.v[1].toFixed(1)} m/s\n` +
+    `Hava hz ${b.airspeed.toFixed(1).padStart(5)} m/s (${(b.airspeed*3.6).toFixed(0)} km/h)   Yer ${gs.toFixed(1)}\n` +
+    `Gaz ${Math.round(state.rc.throttle*100).toString().padStart(3)}%  Motor ${thr}%   Yön ${hdg.toFixed(0).padStart(3)}°`;
+  $('stall').classList.toggle('hidden', !(b.stalled && !b.onGround && C.type === 'plane' && !b.crashed));
+  if (b.crashed) showOverlay(`💥 Kaza! <span style="font-weight:600">${b.crashReason}</span><br><button class="danger" style="margin-top:8px" id="ov-reset">↺ Yeniden başlat</button>`);
+}
+document.addEventListener('click', e => { if (e.target && e.target.id === 'ov-reset') resetFlight(); });
+
+// Ses
+let audio = null;
+function initAudio() {
+  if (!state.opts.sound) return;
+  if (audio) { try { if (audio.ctx.state === 'suspended') audio.ctx.resume(); } catch (_) {} return; }
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    const ctx = new AC(), o = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+    o.type = 'sawtooth'; f.type = 'lowpass'; f.frequency.value = 1100; g.gain.value = 0;
+    o.connect(f); f.connect(g); g.connect(ctx.destination); o.start(); audio = { ctx, o, g };
+  } catch (_) {}
+}
+function updateAudio() {
+  if (!audio) return;
+  const on = state.opts.sound && state.mode === 'fly' && state.body && !state.body.crashed;
+  let th = 0; if (on) th = state.body.motor.length ? Math.max(...state.body.motor) : 0;
+  const multi = state.craft.type === 'multirotor';
+  const base = multi ? 140 : 55, span = multi ? 260 : 170;
+  audio.o.frequency.setTargetAtTime(base + th*span + (on ? Math.min(40, state.body.airspeed) : 0), audio.ctx.currentTime, 0.06);
+  audio.g.gain.setTargetAtTime(on ? 0.02 + th*0.06 : 0, audio.ctx.currentTime, 0.08);
+}
+
+// ---------------------------------------------------------------------
+//  Arayüz bağlantıları
+// ---------------------------------------------------------------------
+{
+  const host = $('part-buttons'), GR = [['Gövde, Kokpit & Aviyonik','fus'],['Kanatlar & Planörler','wing'],['Kuyruk & Stabilizörler','tail,fin'],['Uçak Motorları & Roketler','prop'],['Drone Sistemleri','rotor,frame,arm'],['İniş Takımları & Şamandıralar','gear']];
+  for (const [title, ks] of GR) {
+    const h = document.createElement('h4'); h.textContent = title; host.appendChild(h);
+    for (const t of Object.keys(PART_DEFS)) if (ks.split(',').includes(PART_DEFS[t].k)) {
+      const b = document.createElement('button'), c = document.createElement('i'); c.style.background = '#' + PART_DEFS[t].color.toString(16).padStart(6, '0');
+      b.append(c, PART_DEFS[t].label); b.onclick = () => addPart(t); host.appendChild(b); }
+  }
+}
+document.querySelectorAll('[data-preset]').forEach(b => b.onclick = () => { loadPreset(b.dataset.preset); if (b.dataset.preset !== 'empty') toast('Model yüklendi'); });
+function bindRepeat(btn, fn) {
+  let t1 = 0, t2 = 0;
+  const stop = () => { clearTimeout(t1); clearInterval(t2); };
+  btn.addEventListener('pointerdown', e => { e.preventDefault(); fn(); stop(); t1 = setTimeout(() => { t2 = setInterval(fn, 80); }, 320); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => btn.addEventListener(ev, stop));
+}
+document.querySelectorAll('[data-mv]').forEach(b => { const [a, s] = [b.dataset.mv[0], b.dataset.mv[1] === '+' ? 1 : -1]; bindRepeat(b, () => movePart({ x:0, y:1, z:2 }[a], s)); });
+document.querySelectorAll('[data-step]').forEach(b => b.onclick = () => {
+  state.step = parseFloat(b.dataset.step); document.querySelectorAll('[data-step]').forEach(x => x.classList.toggle('on', x === b)); });
+document.querySelectorAll('[data-rot]').forEach(b => b.onclick = () => rotatePart(b.dataset.rot));
+$('btn-size-').onclick = () => sizePart(1/1.15); $('btn-size+').onclick = () => sizePart(1.15);
+$('btn-mirror').onclick = mirrorPart; $('btn-dup').onclick = dupPart; $('btn-delete').onclick = deletePart;
+$('btn-save').onclick = saveDesign; $('btn-load').onclick = loadDesign;
+$('btn-build').onclick = () => setMode('build'); $('btn-fly').onclick = () => setMode('fly');
+$('btn-zoom-in').onclick = () => setZoom(zoomValue()*0.8); $('btn-zoom-out').onclick = () => setZoom(zoomValue()*1.25);
+$('btn-cam').onclick = cycleCamera;
+$('btn-assist').onclick = e => { state.opts.assist = !state.opts.assist; e.currentTarget.classList.toggle('on', state.opts.assist); toast('Asistan ' + (state.opts.assist ? 'açık' : 'kapalı')); };
+$('btn-pinv').onclick = e => { state.opts.invertPitch = !state.opts.invertPitch; e.currentTarget.classList.toggle('on', state.opts.invertPitch); toast(state.opts.invertPitch ? 'İtince burun yukarı' : 'Geri çekince burun yukarı'); };
+$('btn-acro').onclick = e => { state.opts.acro = !state.opts.acro; e.currentTarget.textContent = state.opts.acro ? 'ACRO' : 'ANGLE'; e.currentTarget.classList.toggle('on', state.opts.acro); };
+$('btn-althold').onclick = e => { state.opts.altHold = !state.opts.altHold; e.currentTarget.classList.toggle('on', state.opts.altHold); applyStickModeForCraft(); toast(state.opts.altHold ? 'Gaz çubuğu: tırmanma hızı (ortada = sabit irtifa)' : 'Gaz çubuğu: doğrudan motor gücü'); };
+$('btn-wind').onclick = e => { state.opts.wind = (state.opts.wind + 1) % WIND_LEVELS.length; e.currentTarget.textContent = '🌬 Rüzgâr: ' + WIND_NAMES[state.opts.wind]; };
+$('btn-sound').onclick = e => { state.opts.sound = !state.opts.sound; e.currentTarget.textContent = state.opts.sound ? '🔊' : '🔇'; if (state.opts.sound) initAudio(); };
+$('btn-resetfly').onclick = resetFlight;
+{
+  const br = $('btn-brake'), on = e => { e.preventDefault(); state.brake = true; br.classList.add('on'); }, off = () => { state.brake = false; br.classList.remove('on'); };
+  br.addEventListener('pointerdown', on); ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => br.addEventListener(ev, off));
+}
+
+$('dock-toggle').onclick = () => { const c = $('build-dock').classList.toggle('collapsed'); $('dock-toggle').textContent = c ? '▴ Ayarlar' : '▾ Gizle'; };
+$('btn-undo').onclick = undo;
+$('btn-center').onclick = () => { const q = selPart(); if (!q) return toast('Önce bir parça seç'); pushUndo(); q.pos[0] = 0; refresh(); };
+$('btn-match').onclick = () => { const q = selPart(); if (!q) return toast('Önce bir parça seç'); pushUndo(); if (matchDiameter(q)) { refresh(); toast('Çap komşu gövdeye eşitlendi'); } else { undoStack.pop(); toast('Eşitlenecek komşu gövde yok'); } };
+$('btn-snap').onclick = e => { state.opts.snap = !state.opts.snap; e.currentTarget.classList.toggle('on', state.opts.snap); toast('Yapışma ' + (state.opts.snap ? 'açık' : 'kapalı')); };
+function onResize() {
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight);
+}
+addEventListener('resize', onResize); addEventListener('orientationchange', () => setTimeout(onResize, 200));
+if (window.visualViewport) window.visualViewport.addEventListener('resize', onResize);
+
+// ---------------------------------------------------------------------
+//  Ana döngü (sabit adımlı fizik)
+// ---------------------------------------------------------------------
+const STEP = 1/120; let acc = 0, simT = 0, last = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.1, (now - last)/1000); last = now;
+  pollGamepad(dt);
+  if (state.mode === 'fly' && state.body && state.craft.type !== 'none') {
+    const inp = buildInput(dt);
+    envState.wind = windAt(simT);
+    acc += dt; let n = 0;
+    while (acc >= STEP && n < 10) { stepBody(state.body, state.craft, inp, envState, STEP); acc -= STEP; simT += STEP; n++; }
+    if (n === 10) acc = 0;
+    syncCraft(dt); updateHud(dt);
+  }
+  // rüzgâr gülü
+  { const w = envState.wind, sp = Math.hypot(w[0], w[2]), u = sockGroup.userData;
+    if (sp > 0.05) u.head.rotation.y += (Math.atan2(w[0], w[2]) - u.head.rotation.y) * 0.1;
+    u.cone.rotation.x = Math.PI/2 + Math.max(0, 1 - sp/8)*0.9; if (!sp) u.cone.rotation.x = Math.PI/2 + 0.9; }
+  updateCamera(dt);
+  const tp = craftGroup.position;
+  // İrtifayla atmosferden uzaya yumuşak geçiş
+  const altitude=Math.max(0,tp.y);
+  const spaceBlend=clamp((altitude-1800)/1500,0,1);
+  skyDome.visible=spaceBlend<0.98;
+  scene.background=spaceBlend>0.02 ? new THREE.Color(0x02040d).lerp(new THREE.Color(0x000008),spaceBlend) : null;
+  if (window.__skySpace) {
+    const sp=window.__skySpace;
+    sp.starMat.opacity=spaceBlend;
+    sp.stars.position.copy(camera.position);
+    sp.planet.visible=spaceBlend>0.25;
+    sp.moon.visible=spaceBlend>0.45;
+    sp.planet.position.copy(camera.position).add(new THREE.Vector3(-5200,2200,-7200));
+    sp.moon.position.copy(camera.position).add(new THREE.Vector3(3900,2900,-7600));
+    for (const cl of sp.cloudLayers) cl.visible=altitude<2200;
+  }
+  sun.position.set(tp.x + 40, tp.y + 80, tp.z + 30); sun.target.position.copy(tp); sun.target.updateMatrixWorld();
+  updateAudio();
+  renderer.render(scene, camera);
+}
+
+loadPreset('plane');
+setMode('build');
+requestAnimationFrame(frame);
+
+}
+</script>
+</body>
+</html>
